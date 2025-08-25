@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "1.0",
+  "id": "address-validator",
+  "name": "Address Validator",
+  "version": "1.2.0",
+  "description": "Validates and standardizes postal addresses using multiple providers including Google Maps, Here, and Mapbox",
+  "author": {
+    "name": "Keystone Team",
+    "email": "plugins@kevinalthaus.com",
+    "url": "https://kevinalthaus.com"
+  },
+  "license": "MIT",
+  "homepage": "https://kevinalthaus.com/plugins/address-validator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kevinalthaus/keystone-plugins"
+  },
+  "keywords": [
+    "address",
+    "validation", 
+    "postal",
+    "geocoding",
+    "maps",
+    "location"
+  ],
+  "category": "utility",
+  "compatibility": {
+    "platform": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "permissions": [
+    "addresses:validate",
+    "addresses:standardize", 
+    "external-api:access",
+    "data:read",
+    "data:write"
+  ],
+  "entryPoints": {
+    "backend": {
+      "routes": "./routes/validator.js",
+      "services": "./services/AddressService.js",
+      "main": "./index.js",
+      "hooks": {
+        "install": "./hooks/install.js",
+        "uninstall": "./hooks/uninstall.js",
+        "enable": "./hooks/enable.js",
+        "disable": "./hooks/disable.js"
+      }
+    },
+    "frontend": {
+      "components": "./components/AddressValidator.jsx",
+      "pages": "./pages/AddressValidatorPage.jsx"
+    },
+    "admin": {
+      "pages": "./admin/ValidatorSettings.jsx",
+      "components": "./admin/ValidatorDashboard.jsx"
+    }
+  },
+  "configuration": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["google", "here", "mapbox"],
+          "default": "google",
+          "description": "Primary geocoding provider"
+        },
+        "apiKey": {
+          "type": "string",
+          "description": "API key for the selected provider",
+          "sensitive": true
+        },
+        "fallbackProvider": {
+          "type": "string",
+          "enum": ["google", "here", "mapbox", "none"],
+          "default": "none", 
+          "description": "Fallback provider if primary fails"
+        },
+        "fallbackApiKey": {
+          "type": "string",
+          "description": "API key for fallback provider",
+          "sensitive": true
+        },
+        "cacheResults": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cache validation results to reduce API calls"
+        },
+        "cacheTtl": {
+          "type": "integer",
+          "default": 86400,
+          "description": "Cache TTL in seconds (24 hours default)"
+        },
+        "maxRetries": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum retry attempts for failed requests"
+        },
+        "validateComponents": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate individual address components"
+        },
+        "requireCountry": {
+          "type": "boolean", 
+          "default": false,
+          "description": "Require country code in address"
+        },
+        "allowedCountries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Restrict validation to specific countries (ISO codes)"
+        }
+      },
+      "required": ["provider", "apiKey"]
+    },
+    "ui": {
+      "form": "./admin/config-form.js"
+    }
+  },
+  "database": {
+    "migrations": "./migrations/",
+    "seeds": "./seeds/"
+  },
+  "events": {
+    "listens": [
+      "user.address_updated",
+      "order.shipping_address_changed"
+    ],
+    "emits": [
+      "address.validated",
+      "address.validation_failed",
+      "address.standardized",
+      "geocoding.coordinates_found"
+    ]
+  },
+  "api": {
+    "version": "1.0",
+    "prefix": "/api/plugins/address-validator",
+    "documentation": "./docs/api.md",
+    "rateLimit": {
+      "requests": 100,
+      "window": 3600
+    }
+  },
+  "ui": {
+    "theme": {
+      "primaryColor": "#1976d2",
+      "icon": "LocationOn"
+    },
+    "responsive": true,
+    "accessibility": "WCAG_2_1_AA"
+  },
+  "monitoring": {
+    "metrics": [
+      "validation_requests_total",
+      "validation_success_rate", 
+      "api_response_time",
+      "cache_hit_rate"
+    ],
+    "health_check": "/health"
+  }
+}

@@ -25,7 +25,15 @@
     "zustand": "^4.3.0",
     "react-hook-form": "^7.45.0",
     "zod": "^3.21.0",
-    "@hookform/resolvers": "^3.1.0"
+    "@hookform/resolvers": "^3.1.0",
+    "@mui/material": "^5.14.0",
+    "@mui/icons-material": "^5.14.0",
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "notistack": "^3.0.1",
+    "recharts": "^2.7.0",
+    "date-fns": "^2.30.0",
+    "jwt-decode": "^3.1.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

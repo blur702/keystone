@@ -4,13 +4,13 @@
   "private": true,
   "description": "Keystone Python Services - Calculation and data processing services",
   "scripts": {
-    "dev": "python -m uvicorn src.main:app --reload --port 8000",
-    "start": "python -m uvicorn src.main:app --port 8000",
-    "test": "python -m pytest",
-    "test:coverage": "python -m pytest --cov=src --cov-report=html",
-    "lint": "python -m flake8 src tests && python -m mypy src",
-    "format": "python -m black src tests && python -m isort src tests",
-    "type-check": "python -m mypy src",
+    "dev": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m uvicorn src.main:app --reload --port 8000",
+    "start": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m uvicorn src.main:app --port 8000",
+    "test": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m pytest",
+    "test:coverage": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m pytest --cov=src --cov-report=html",
+    "lint": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m flake8 src tests && python3 -m mypy src",
+    "format": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m black src tests && python3 -m isort src tests",
+    "type-check": "cd /home/kevin/keystone/packages/python-services && source venv/bin/activate && python3 -m mypy src",
     "clean": "find . -type d -name __pycache__ -exec rm -rf {} + && rm -rf .pytest_cache .coverage htmlcov"
   }
 }

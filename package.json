@@ -10,6 +10,11 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:install": "playwright install",
     "lint": "turbo run lint",
     "format": "turbo run format",
     "clean": "turbo run clean",
@@ -20,7 +25,8 @@
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
     "prettier": "^3.0.0",
-    "eslint": "^8.0.0"
+    "eslint": "^8.0.0",
+    "@playwright/test": "^1.40.0"
   },
   "packageManager": "npm@10.0.0",
   "engines": {
