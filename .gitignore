@@ -1,0 +1,97 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+*.env
+production.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Docker
+*.pid
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+postgres_data/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.cache/
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/
+
+# Testing
+*.test.js
+*.spec.js
+
+# Package manager
+.npm/
+.yarn/
+.pnp.*
+yarn.lock
+package-lock.json
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+ssl/
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Nginx logs
+nginx/logs/
+nginx_logs/
