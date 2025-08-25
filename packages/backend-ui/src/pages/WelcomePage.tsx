@@ -76,7 +76,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
       label: 'View Analytics',
       icon: <Dashboard />,
       permission: 'analytics:view',
-      route: 'http://localhost:3001', // Grafana URL
+      route: 'https://kevinalthaus.com/grafana/', // Grafana Analytics Dashboard
       external: true,
       visible: isAdmin || hasPermission('analytics:view')
     },
