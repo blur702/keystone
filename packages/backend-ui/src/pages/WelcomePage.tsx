@@ -25,6 +25,7 @@ import {
   Settings
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface WelcomePageProps {
   toggleTheme: () => void;
@@ -33,10 +34,52 @@ interface WelcomePageProps {
 
 const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logout();
   };
+
+  // Check user permissions for RBAC
+  const hasPermission = (permission: string): boolean => {
+    return user?.permissions?.includes(permission) || false;
+  };
+
+  // For demo purposes, if user has 'admin' role, grant all permissions
+  const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('user');
+  
+  // Define Quick Action buttons with their required permissions
+  const quickActions = [
+    {
+      label: 'Manage Users',
+      icon: <People />,
+      permission: 'users:manage',
+      route: '/users',
+      visible: isAdmin || hasPermission('users:manage')
+    },
+    {
+      label: 'Configure Roles',
+      icon: <Security />,
+      permission: 'roles:manage',
+      route: '/roles',
+      visible: isAdmin || hasPermission('roles:manage')
+    },
+    {
+      label: 'System Settings',
+      icon: <Settings />,
+      permission: 'settings:edit',
+      route: '/settings',
+      visible: isAdmin || hasPermission('settings:edit')
+    },
+    {
+      label: 'View Analytics',
+      icon: <Dashboard />,
+      permission: 'analytics:view',
+      route: 'http://localhost:3001', // Grafana URL
+      external: true,
+      visible: isAdmin || hasPermission('analytics:view')
+    }
+  ];
 
   const getInitials = (email: string) => {
     return email.substring(0, 2).toUpperCase();
@@ -167,18 +210,30 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
           </Typography>
           <Divider sx={{ mb: 2 }} />
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Button variant="outlined" startIcon={<People />}>
-              Manage Users
-            </Button>
-            <Button variant="outlined" startIcon={<Security />}>
-              Configure Roles
-            </Button>
-            <Button variant="outlined" startIcon={<Settings />}>
-              System Settings
-            </Button>
-            <Button variant="outlined" startIcon={<Dashboard />}>
-              View Analytics
-            </Button>
+            {quickActions.filter(action => action.visible).map((action, index) => (
+              <Button
+                key={index}
+                variant="outlined"
+                startIcon={action.icon}
+                onClick={() => {
+                  if (action.external) {
+                    // Open external link in new tab
+                    window.open(action.route, '_blank', 'noopener,noreferrer');
+                  } else {
+                    // Navigate internally using React Router
+                    navigate(action.route);
+                  }
+                }}
+                aria-label={action.label}
+              >
+                {action.label}
+              </Button>
+            ))}
+            {quickActions.filter(action => action.visible).length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No actions available for your role
+              </Typography>
+            )}
           </Box>
         </Paper>
 
