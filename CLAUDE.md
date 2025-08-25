@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Keystone is an enterprise-grade monorepo application deployed at kevinalthaus.com. It consists of a Node.js/Express backend API, React admin UI, and supporting services, all containerized with Docker and managed through Turborepo.
+Keystone is an enterprise-grade monorepo application deployed at kevinalthaus.com. It's a full-stack platform with authentication, RBAC, and admin dashboard capabilities, built with TypeScript, React, and PostgreSQL.
 
 ## Deployment Information
 
@@ -14,79 +14,114 @@ Keystone is an enterprise-grade monorepo application deployed at kevinalthaus.co
 - **Environment Config**: `/etc/kevinalthaus-apps/production.env`
 - **Nginx Config**: `/etc/nginx/sites-available/kevinalthaus.com`
 - **SSL**: Managed by Certbot with Let's Encrypt
+- **Git Repository**: Local at `/var/www/kevinalthaus.com/` (branch: main)
 
 ## Architecture
 
-### Core Services
+### Monorepo Structure
+```
+packages/
+├── backend/          # Node.js/Express API server
+├── backend-ui/       # React admin dashboard
+├── frontend/         # Public-facing React app (not deployed)
+└── python-services/  # Python microservices (not deployed)
+```
+
+### Core Services & Ports
 - **PostgreSQL Database** (port 5432): Primary data store with migrations
-- **Backend API** (port 3000): Express/TypeScript API at `/api/*`
-- **Backend UI** (port 5174): React admin panel at `/`
-- **Nginx**: System-level reverse proxy handling SSL and routing
+- **Backend API** (port 3000): Express/TypeScript API, accessed via `/api/*`
+- **Backend UI** (port 5174): React admin panel, served at root `/`
+- **Nginx**: System-level reverse proxy (ports 80/443)
+  - Strips `/api` prefix when proxying to backend
+  - Routes `/api/*` → `localhost:3000/*`
+  - Routes `/` → `localhost:5174/`
 
-### Authentication System
+### Authentication & Authorization
 - JWT-based authentication with refresh tokens
-- Login accepts either `email` or `username` field
-- API endpoint: `POST /api/api/auth/login`
-- Routes defined in `packages/backend/src/routes/auth.ts`
-- Service logic in `packages/backend/src/core/services/AuthenticationService.ts`
+- Login accepts either `email` or `username`
+- API endpoint: `POST /api/auth/login` (Note: nginx adds `/api` prefix)
+- Auth routes: `packages/backend/src/routes/auth.ts` mounted at `/auth`
+- Service: `packages/backend/src/core/services/AuthenticationService.ts`
+- RBAC permissions format: `resource:action` (e.g., `users:manage`)
 
-### Database Schema
-Key tables include:
-- `users`: User accounts with email/username login support
-- `sessions`: Active user sessions with JWT tokens
-- `roles`, `permissions`, `user_roles`: RBAC system
-- Migrations in `packages/backend/migrations/`
+### Frontend Architecture
+- **Router**: React Router v6 with protected routes
+- **State Management**: React Context (AuthContext)
+- **UI Framework**: Material-UI v5
+- **Build Tool**: Vite
+- **Theme**: Light/Dark mode support with MUI theming
+
+### Backend Architecture
+- **Framework**: Express with TypeScript
+- **Database**: PostgreSQL with raw SQL queries
+- **Authentication**: JWT with bcrypt password hashing
+- **Services**: Singleton pattern for core services
+- **Migrations**: SQL files in `packages/backend/migrations/`
 
 ## Essential Commands
 
 ### Development
 ```bash
-# Install dependencies
+# Install all dependencies (from project root)
 npm install
 
 # Run all services in development
 npm run dev
 
-# Run specific package
+# Run specific package in dev mode
 npm run dev --workspace=@keystone/backend
 npm run dev --workspace=@keystone/backend-ui
 
-# Build TypeScript
+# Build TypeScript (backend)
 cd packages/backend && npm run build
-cd packages/backend-ui && npm run build
+
+# Build React app (backend-ui) with correct API URL
+cd packages/backend-ui && VITE_API_URL=/api npx vite build
 ```
 
 ### Docker Operations
 ```bash
-# Start containers (from /var/www/kevinalthaus.com)
+# Start all containers (from /var/www/kevinalthaus.com)
 docker compose -f docker-compose.minimal.yml up -d postgres backend backend-ui
 
-# Rebuild and deploy backend changes
-cd /var/www/kevinalthaus.com
+# Rebuild and deploy backend
 docker compose -f docker-compose.minimal.yml build backend
 docker compose -f docker-compose.minimal.yml up -d backend
 
-# View container logs
+# Rebuild and deploy frontend
+docker compose -f docker-compose.minimal.yml build backend-ui
+docker compose -f docker-compose.minimal.yml up -d backend-ui
+
+# View logs
 docker logs keystone-backend -f
+docker logs keystone-backend-ui -f
+docker logs keystone-postgres -f
 
 # Access PostgreSQL
 docker exec -it keystone-postgres psql -U keystone -d keystone
+
+# Check container status
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
 ### System Administration
 ```bash
-# Restart nginx (after config changes)
+# Nginx operations (password: (130Bpm))
 echo '(130Bpm)' | sudo -S systemctl reload nginx
+echo '(130Bpm)' | sudo -S systemctl restart nginx
+echo '(130Bpm)' | sudo -S nginx -t
 
 # Check service status
 systemctl status nginx
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Update SSL certificates
 echo '(130Bpm)' | sudo -S certbot renew
+
+# View nginx error logs
+sudo tail -f /var/log/nginx/error.log
 ```
 
-### Testing & Linting
+### Testing & Validation
 ```bash
 # Run tests
 npm test
@@ -97,51 +132,39 @@ npm run type-check
 
 # Linting
 npm run lint
+
+# Format code
+npm run format
 ```
-
-## Important File Locations
-
-### Backend Service
-- Entry point: `packages/backend/src/server.ts`
-- Compiled JS: `packages/backend/dist/`
-- Auth routes: `packages/backend/src/routes/auth.ts`
-- Core services: `packages/backend/src/core/services/`
-- Dockerfile: `packages/backend/Dockerfile`
-
-### Backend UI
-- Entry point: `packages/backend-ui/src/main.tsx`
-- Build output: `packages/backend-ui/dist/`
-- Nginx config: `packages/backend-ui/nginx.conf`
-- Vite config: `packages/backend-ui/vite.config.ts`
-
-### Configuration
-- Docker compose: `docker-compose.minimal.yml` (production), `docker-compose.yml` (full)
-- Environment vars: `/etc/kevinalthaus-apps/production.env`
-- Turbo config: `turbo.json`
 
 ## Common Workflows
 
-### Updating Backend Code
-1. Edit TypeScript source in `packages/backend/src/`
-2. Build: `cd packages/backend && npm run build`
-3. Rebuild Docker image: `docker compose -f docker-compose.minimal.yml build backend`
-4. Deploy: `docker compose -f docker-compose.minimal.yml up -d backend`
+### Adding a New API Endpoint
+1. Add route handler in `packages/backend/src/routes/`
+2. Update route mounting in `packages/backend/src/server.ts`
+3. Build: `cd packages/backend && npm run build`
+4. Rebuild container: `docker compose -f docker-compose.minimal.yml build backend`
+5. Deploy: `docker compose -f docker-compose.minimal.yml up -d backend`
 
-### Updating Frontend Code
-1. Edit React code in `packages/backend-ui/src/`
-2. Build: `cd packages/backend-ui && npm run build`
-3. Rebuild Docker image: `docker compose -f docker-compose.minimal.yml build backend-ui`
-4. Deploy: `docker compose -f docker-compose.minimal.yml up -d backend-ui`
+### Adding a New Frontend Page
+1. Create component in `packages/backend-ui/src/pages/`
+2. Add route in `packages/backend-ui/src/App.tsx`
+3. Update navigation in `WelcomePage.tsx` if needed
+4. Build: `cd packages/backend-ui && VITE_API_URL=/api npx vite build`
+5. Rebuild container: `docker compose -f docker-compose.minimal.yml build backend-ui`
+6. Deploy: `docker compose -f docker-compose.minimal.yml up -d backend-ui`
 
-### Database Operations
+### Database Schema Changes
 ```bash
-# Run migrations
-docker exec keystone-backend npm run migrate
+# Create migration file
+echo "CREATE TABLE ..." > packages/backend/migrations/003_new_table.sql
 
-# Create new user via SQL
+# Apply migration manually
+docker exec -i keystone-postgres psql -U keystone -d keystone < packages/backend/migrations/003_new_table.sql
+
+# Update user password (example)
 docker exec -i keystone-postgres psql -U keystone -d keystone << 'EOF'
-INSERT INTO users (email, username, password_hash, first_name, last_name)
-VALUES ('email', 'username', 'bcrypt_hash', 'First', 'Last');
+UPDATE users SET password_hash = 'bcrypt_hash' WHERE username = 'kevin';
 EOF
 ```
 
@@ -150,21 +173,64 @@ EOF
 # Health check
 curl https://kevinalthaus.com/api/health
 
-# Login
-curl -X POST https://kevinalthaus.com/api/api/auth/login \
+# Login (note the double /api due to nginx routing)
+curl -X POST https://kevinalthaus.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"kevin","password":"(130Bpm)"}'
 
-# Register
-curl -X POST https://kevinalthaus.com/api/api/auth/register \
+# Register new user
+curl -X POST https://kevinalthaus.com/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","username":"user","password":"Pass123","first_name":"First","last_name":"Last"}'
 ```
 
-## Notes
+### Git Operations
+```bash
+cd /var/www/kevinalthaus.com
 
-- The backend compiles TypeScript to JavaScript; when build fails, you may need to manually update files in `dist/`
-- System nginx proxies requests, removing `/api` prefix before forwarding to backend
-- Docker containers use a bridge network `keystone-network` for internal communication
+# Check status
+git status
+
+# Commit changes
+git add .
+git commit -m "feat: Your feature description"
+
+# View history
+git log --oneline -10
+```
+
+## Current Implementation Status
+
+### Completed Features
+- ✅ User authentication (JWT with email/username login)
+- ✅ RBAC foundation (roles, permissions tables)
+- ✅ Admin dashboard with Quick Actions
+- ✅ User management page (CRUD operations)
+- ✅ Role management page
+- ✅ System settings page
+- ✅ Dark/Light theme toggle
+- ✅ Docker containerization
+- ✅ SSL/HTTPS configuration
+
+### Frontend Routes
+- `/login` - Login page
+- `/` - Dashboard/Welcome page
+- `/users` - User management
+- `/roles` - Role & permission management
+- `/settings` - System settings
+
+### Known Issues & Workarounds
+1. **TypeScript Build Failures**: If backend TypeScript won't compile, manually edit files in `dist/` directory
+2. **Frontend Cache**: Browser may cache old frontend; use Ctrl+Shift+R to force reload
+3. **API Route Confusion**: Remember that nginx strips `/api` prefix, so backend routes are mounted without it
+4. **Password**: System sudo password is `(130Bpm)`
+
+## Important Notes
+
+- Frontend builds require `VITE_API_URL=/api` environment variable
+- Backend routes are mounted at `/auth`, not `/api/auth` (nginx handles the prefix)
+- Docker containers use `keystone-network` bridge network
 - Authentication service is a singleton initialized at server start
-- CORS is configured to accept requests from the production domain
+- CORS is configured for production domain
+- Admin user (`kevin`) is protected from deletion in the UI
+- Mock data is used for users/roles until API endpoints are implemented
