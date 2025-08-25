@@ -6,7 +6,10 @@ import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import winston from 'winston';
 import { AuthenticationService } from './core/services/AuthenticationService';
+import { ActivityLogger } from './core/services/ActivityLogger';
+import { activityLoggerMiddleware } from './middleware/activityLogger';
 import authRoutes from './routes/auth';
+import activityRoutes from './routes/activity';
 
 dotenv.config();
 
@@ -101,12 +104,21 @@ const initializeServices = async () => {
     await authService.initialize();
     logger.info('Authentication service initialized');
 
-    // Make auth service available to routes
+    // Initialize activity logger
+    ActivityLogger.initialize(pool);
+    logger.info('Activity logger initialized');
+
+    // Make services available to routes
     app.set('authService', authService);
     app.set('logger', logger);
+    app.set('pool', pool);
+
+    // Apply activity logging middleware
+    app.use(activityLoggerMiddleware);
 
     // Routes
     app.use('/auth', authRoutes);
+    app.use('/activity-logs', activityRoutes);
 
     // Error handling middleware
     app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

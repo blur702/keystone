@@ -22,7 +22,8 @@ import {
   Dashboard,
   Security,
   People,
-  Settings
+  Settings,
+  Timeline
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -78,6 +79,13 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
       route: 'http://localhost:3001', // Grafana URL
       external: true,
       visible: isAdmin || hasPermission('analytics:view')
+    },
+    {
+      label: 'Activity Logs',
+      icon: <Timeline />,
+      permission: 'activity:view',
+      route: '/activity',
+      visible: isAdmin || hasPermission('activity:view')
     }
   ];
 

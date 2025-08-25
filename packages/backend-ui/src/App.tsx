@@ -8,6 +8,7 @@ import WelcomePage from './pages/WelcomePage';
 import UsersPage from './pages/UsersPage';
 import RolesPage from './pages/RolesPage';
 import SettingsPage from './pages/SettingsPage';
+import ActivityLogsPage from './pages/ActivityLogsPage';
 import { lightTheme, darkTheme } from './theme';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -74,6 +75,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <SettingsPage toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/activity"
+          element={
+            <ProtectedRoute>
+              <ActivityLogsPage toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
             </ProtectedRoute>
           }
         />
