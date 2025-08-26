@@ -1,0 +1,42 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - heading "🚀 Keystone Platform" [level=1] [ref=e3]
+  - paragraph [ref=e4]:
+    - strong [ref=e5]: Test Environment
+    - text: "- pw.kevinalthaus.com"
+  - generic [ref=e6]:
+    - heading "System Status" [level=2] [ref=e7]
+    - generic [ref=e8]:
+      - generic [ref=e9]: Backend API
+      - generic [ref=e10]: Offline
+    - generic [ref=e11]:
+      - generic [ref=e12]: Database
+      - generic [ref=e13]: Error
+    - generic [ref=e14]:
+      - generic [ref=e15]: Plugin System
+      - generic [ref=e16]: Error
+    - generic [ref=e17]:
+      - generic [ref=e18]: Address Validator
+      - generic [ref=e19]: Offline
+  - generic [ref=e20]:
+    - heading "Address Validator Plugin" [level=2] [ref=e21]
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]: Street Address
+        - textbox "Street Address" [ref=e25]
+      - generic [ref=e26]:
+        - generic [ref=e27]: City
+        - textbox "City" [ref=e28]
+      - generic [ref=e29]:
+        - generic [ref=e30]: State
+        - textbox "State" [ref=e31]
+      - generic [ref=e32]:
+        - generic [ref=e33]: ZIP Code
+        - textbox "ZIP Code" [ref=e34]
+      - button "Validate Address" [ref=e35] [cursor=pointer]
+  - generic [ref=e36]:
+    - paragraph [ref=e37]: Keystone Platform v1.0.0 | Plugin Architecture | Test Environment
+    - paragraph [ref=e38]: "SSL: ✅ Secured | Environment: Production"
+```

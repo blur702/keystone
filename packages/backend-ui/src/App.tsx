@@ -5,6 +5,9 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import WelcomePage from './pages/WelcomePage';
+import UsersPage from './pages/UsersPage';
+import RolesPage from './pages/RolesPage';
+import SettingsPage from './pages/SettingsPage';
 import { lightTheme, darkTheme } from './theme';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -47,6 +50,30 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <WelcomePage toggleTheme={toggleTheme} isDarkMode={isDarkMode} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <UsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/roles"
+          element={
+            <ProtectedRoute>
+              <RolesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />

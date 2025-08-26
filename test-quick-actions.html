@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Quick Actions</title>
+</head>
+<body>
+    <h1>Testing Quick Actions on Keystone Backend</h1>
+    <div id="status"></div>
+    <button onclick="testQuickActions()">Test Quick Actions</button>
+    <pre id="result"></pre>
+    
+    <script>
+        async function testQuickActions() {
+            const status = document.getElementById('status');
+            const result = document.getElementById('result');
+            status.textContent = 'Testing...';
+            
+            try {
+                // First login
+                const loginResponse = await fetch('https://kevinalthaus.com/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'kevin',
+                        password: '(130Bpm)'
+                    })
+                });
+                
+                const loginData = await loginResponse.json();
+                
+                if (loginData.token) {
+                    localStorage.setItem('token', loginData.token);
+                    status.textContent = '✅ Login successful!';
+                    
+                    // Test navigation endpoints existence
+                    const routes = [
+                        '/',
+                        '/users',
+                        '/roles',
+                        '/settings'
+                    ];
+                    
+                    let testResults = [];
+                    for (const route of routes) {
+                        try {
+                            const response = await fetch(`https://kevinalthaus.com${route}`, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${loginData.token}`
+                                }
+                            });
+                            testResults.push({
+                                route: route,
+                                status: response.status,
+                                ok: response.ok,
+                                statusText: response.statusText
+                            });
+                        } catch (error) {
+                            testResults.push({
+                                route: route,
+                                error: error.message
+                            });
+                        }
+                    }
+                    
+                    result.textContent = JSON.stringify({
+                        login: 'success',
+                        token: loginData.token.substring(0, 30) + '...',
+                        routeTests: testResults,
+                        message: 'Quick action buttons should now navigate correctly!'
+                    }, null, 2);
+                } else {
+                    status.textContent = '❌ Login failed';
+                    result.textContent = JSON.stringify(loginData, null, 2);
+                }
+            } catch (error) {
+                status.textContent = '❌ Error occurred';
+                result.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+[32minfo[39m: Database connected {"timestamp":"2025-08-26T17:01:47.570Z"}
+[32minfo[39m: PostgreSQL connected successfully {"timestamp":"2025-08-26T17:01:47.582Z"}
+[32minfo[39m: Redis connected successfully {"timestamp":"2025-08-26T17:01:47.588Z"}
+[31merror[39m: Query execution failed {"error":{"code":"0A000","detail":"Could not open extension control file \"/usr/local/share/postgresql/extension/postgis.control\": No such file or directory.","file":"extension.c","hint":"The extension must first be installed on the system where PostgreSQL is running.","length":317,"line":"500","name":"error","routine":"parse_extension_control_file","severity":"ERROR"},"query":"CREATE EXTENSION IF NOT EXISTS postgis","timestamp":"2025-08-26T17:01:47.591Z"}
+[33mwarn[39m: Could not enable PostGIS extensions extension "postgis" is not available {"code":"0A000","detail":"Could not open extension control file \"/usr/local/share/postgresql/extension/postgis.control\": No such file or directory.","file":"extension.c","hint":"The extension must first be installed on the system where PostgreSQL is running.","length":317,"line":"500","name":"error","routine":"parse_extension_control_file","severity":"ERROR","stack":"error: extension \"postgis\" is not available\n    at /home/kevin/keystone/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async DatabaseService.query (/home/kevin/keystone/packages/backend/dist/core/services/DatabaseService.js:131:28)\n    at async DatabaseService.enablePostGIS (/home/kevin/keystone/packages/backend/dist/core/services/DatabaseService.js:104:13)\n    at async DatabaseService.initialize (/home/kevin/keystone/packages/backend/dist/core/services/DatabaseService.js:42:13)\n    at async initializeServices (/home/kevin/keystone/packages/backend/dist/server.js:128:9)","timestamp":"2025-08-26T17:01:47.591Z"}
+[32minfo[39m: Database services initialized successfully {"timestamp":"2025-08-26T17:01:47.592Z"}
+[32minfo[39m: Registered email handler for pattern: /^(support|help|ticket)/i {"timestamp":"2025-08-26T17:01:47.595Z"}
+[32minfo[39m: Registered email handler for pattern: /^(unsubscribe|stop|remove)/i {"timestamp":"2025-08-26T17:01:47.595Z"}
+[32minfo[39m: Registered email handler for pattern: /^(bounce|failure notice|undelivered)/i {"timestamp":"2025-08-26T17:01:47.595Z"}
+[32minfo[39m: Default roles and permissions created {"timestamp":"2025-08-26T17:01:47.627Z"}
+[32minfo[39m: Authentication service initialized {"timestamp":"2025-08-26T17:01:47.627Z"}
+[32minfo[39m: Authentication service initialized {"timestamp":"2025-08-26T17:01:47.627Z"}
+[32minfo[39m: Initializing plugin system... {"timestamp":"2025-08-26T17:01:47.627Z"}
+[32minfo[39m: Loaded 0 plugins from database {"timestamp":"2025-08-26T17:01:47.630Z"}
+[32minfo[39m: Discovered 1 plugins in filesystem {"timestamp":"2025-08-26T17:01:47.631Z"}
+[32minfo[39m: Plugin loader initialized with 0 plugins {"timestamp":"2025-08-26T17:01:47.633Z"}
+[32minfo[39m: Discovered 1 plugins in filesystem {"timestamp":"2025-08-26T17:01:47.633Z"}
+[31merror[39m: Failed to load plugin metadata for address-validator ENOENT: no such file or directory, open '/home/kevin/keystone/packages/backend/dist/plugins/address-validator/plugin.json' {"code":"ENOENT","errno":-2,"path":"/home/kevin/keystone/packages/backend/dist/plugins/address-validator/plugin.json","stack":"Error: ENOENT: no such file or directory, open '/home/kevin/keystone/packages/backend/dist/plugins/address-validator/plugin.json'","syscall":"open","timestamp":"2025-08-26T17:01:47.634Z"}
+[32minfo[39m: Plugin system initialized successfully {"timestamp":"2025-08-26T17:01:47.634Z"}
+[32minfo[39m: All mounted routes: {"timestamp":"2025-08-26T17:01:47.634Z"}
+[32minfo[39m:   GET /health {"timestamp":"2025-08-26T17:01:47.634Z"}
+[32minfo[39m:   GET /metrics {"timestamp":"2025-08-26T17:01:47.635Z"}
+[32minfo[39m:   Router mounted at: /auth/?(?=/| {"timestamp":"2025-08-26T17:01:47.635Z"}
+[32minfo[39m:   Router mounted at: /api/auth/?(?=/| {"timestamp":"2025-08-26T17:01:47.635Z"}
+[32minfo[39m:   Router mounted at: /api/grafana/?(?=/| {"timestamp":"2025-08-26T17:01:47.635Z"}
+[32minfo[39m:   Router mounted at: /api/plugins/?(?=/| {"timestamp":"2025-08-26T17:01:47.635Z"}
+[32minfo[39m:   Router mounted at: /plugins/?(?=/| {"timestamp":"2025-08-26T17:01:47.635Z"}
+[32minfo[39m: Backend server running on port 3000 {"timestamp":"2025-08-26T17:01:47.642Z"}
+[32minfo[39m: Plugin system initialized with dynamic route mounting {"timestamp":"2025-08-26T17:01:47.642Z"}
+[32minfo[39m: Environment: production {"timestamp":"2025-08-26T17:01:47.643Z"}
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T17:03:54.682Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T17:03:54.682Z"}
+::1 - - [26/Aug/2025:17:03:54 +0000] "POST /auth/login HTTP/1.1" 200 1002 "-" "curl/8.5.0"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T17:06:29.586Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T17:06:29.586Z"}
+::1 - - [26/Aug/2025:17:06:29 +0000] "POST /auth/login HTTP/1.1" 200 1002 "https://kevinalthaus.com/login" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T17:16:09.388Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T17:16:09.388Z"}
+::ffff:127.0.0.1 - - [26/Aug/2025:17:16:09 +0000] "POST /auth/login HTTP/1.1" 200 1002 "-" "-"
+::1 - - [26/Aug/2025:17:16:29 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+::ffff:127.0.0.1 - - [26/Aug/2025:17:18:34 +0000] "GET /health HTTP/1.1" 200 59 "-" "curl/8.5.0"
+::ffff:127.0.0.1 - - [26/Aug/2025:17:19:16 +0000] "GET /health HTTP/1.1" 200 59 "-" "-"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T17:19:16.776Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T17:19:16.776Z"}
+::1 - - [26/Aug/2025:17:19:16 +0000] "POST /auth/login HTTP/1.1" 200 1002 "-" "-"
+[33mwarn[39m: 404 Not Found: GET /auth/verify {"timestamp":"2025-08-26T17:19:16.782Z"}
+::ffff:127.0.0.1 - - [26/Aug/2025:17:19:16 +0000] "GET /auth/verify HTTP/1.1" 404 77 "-" "-"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T17:28:46.372Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T17:28:46.372Z"}
+::1 - - [26/Aug/2025:17:28:46 +0000] "POST /auth/login HTTP/1.1" 200 1002 "-" "-"
+::1 - - [26/Aug/2025:17:31:55 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+::1 - - [26/Aug/2025:17:41:55 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+::1 - - [26/Aug/2025:17:51:55 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"

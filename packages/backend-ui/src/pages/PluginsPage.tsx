@@ -24,6 +24,7 @@ import {
   Divider,
   Paper,
   Stack,
+  CircularProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -84,7 +85,7 @@ const PluginsPage: React.FC = () => {
 
   // Install plugin mutation
   const installPluginMutation = useMutation({
-    mutationFn: (formData: FormData) => pluginService.installPlugin(formData),
+    mutationFn: (name: string) => pluginService.installPlugin(name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plugins'] });
       enqueueSnackbar('Plugin installed successfully', { variant: 'success' });
@@ -127,9 +128,10 @@ const PluginsPage: React.FC = () => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('plugin', uploadFile);
-    installPluginMutation.mutate(formData);
+    // For now, just use the file name as the plugin name
+    // In a real implementation, you'd upload the file to the server
+    const pluginName = uploadFile.name.replace(/\.(zip|tar|gz)$/, '');
+    installPluginMutation.mutate(pluginName);
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, plugin: Plugin) => {

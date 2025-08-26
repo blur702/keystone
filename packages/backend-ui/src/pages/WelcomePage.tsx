@@ -24,6 +24,7 @@ import {
   People,
   Settings
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface WelcomePageProps {
@@ -33,10 +34,17 @@ interface WelcomePageProps {
 
 const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logout();
   };
+  
+  // Quick action handlers
+  const handleManageUsers = () => navigate('/users');
+  const handleConfigureRoles = () => navigate('/roles');
+  const handleSystemSettings = () => navigate('/settings');
+  const handleViewAnalytics = () => window.open('/grafana/', '_blank');
 
   const getInitials = (email: string) => {
     return email.substring(0, 2).toUpperCase();
@@ -167,16 +175,32 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
           </Typography>
           <Divider sx={{ mb: 2 }} />
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Button variant="outlined" startIcon={<People />}>
+            <Button 
+              variant="outlined" 
+              startIcon={<People />}
+              onClick={handleManageUsers}
+            >
               Manage Users
             </Button>
-            <Button variant="outlined" startIcon={<Security />}>
+            <Button 
+              variant="outlined" 
+              startIcon={<Security />}
+              onClick={handleConfigureRoles}
+            >
               Configure Roles
             </Button>
-            <Button variant="outlined" startIcon={<Settings />}>
+            <Button 
+              variant="outlined" 
+              startIcon={<Settings />}
+              onClick={handleSystemSettings}
+            >
               System Settings
             </Button>
-            <Button variant="outlined" startIcon={<Dashboard />}>
+            <Button 
+              variant="outlined" 
+              startIcon={<Dashboard />}
+              onClick={handleViewAnalytics}
+            >
               View Analytics
             </Button>
           </Box>

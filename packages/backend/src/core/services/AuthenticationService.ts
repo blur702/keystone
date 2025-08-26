@@ -211,9 +211,9 @@ export class AuthenticationService extends EventEmitter {
     user_agent?: string;
   }): Promise<{ user: User; token: string; refreshToken: string }> {
     try {
-      // Get user
+      // Get user - accept either email or username
       const result = await this.db.query<User>(
-        'SELECT * FROM users WHERE email = $1 AND is_active = true',
+        'SELECT * FROM users WHERE (email = $1 OR username = $1) AND is_active = true',
         [credentials.email]
       );
 
@@ -249,12 +249,12 @@ export class AuthenticationService extends EventEmitter {
 
       const token = jwt.sign(tokenPayload, this.config.jwtSecret, {
         expiresIn: this.config.jwtExpiresIn,
-      });
+      } as any);
 
       const refreshToken = jwt.sign(
         { sessionId, userId: user.id },
         this.config.jwtSecret,
-        { expiresIn: this.config.refreshTokenExpiresIn }
+        { expiresIn: this.config.refreshTokenExpiresIn } as any
       );
 
       // Store session
@@ -350,12 +350,12 @@ export class AuthenticationService extends EventEmitter {
 
       const newToken = jwt.sign(tokenPayload, this.config.jwtSecret, {
         expiresIn: this.config.jwtExpiresIn,
-      });
+      } as any);
 
       const newRefreshToken = jwt.sign(
         { sessionId: newSessionId, userId: user.id },
         this.config.jwtSecret,
-        { expiresIn: this.config.refreshTokenExpiresIn }
+        { expiresIn: this.config.refreshTokenExpiresIn } as any
       );
 
       // Update session

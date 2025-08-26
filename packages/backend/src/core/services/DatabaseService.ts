@@ -1,4 +1,4 @@
-import { Pool, PoolConfig, QueryResult } from 'pg';
+import { Pool, PoolConfig, QueryResult, QueryResultRow } from 'pg';
 import Redis from 'ioredis';
 import winston from 'winston';
 import { EventEmitter } from 'eventemitter3';
@@ -138,7 +138,7 @@ export class DatabaseService extends EventEmitter {
   /**
    * Execute a query with optional caching
    */
-  public async query<T = any>(
+  public async query<T extends QueryResultRow = any>(
     text: string,
     params?: any[],
     options: QueryOptions = {}

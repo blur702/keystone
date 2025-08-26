@@ -1,0 +1,16 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install PostgreSQL client and curl
+RUN apk add --no-cache postgresql-client curl bash
+
+# Copy test data and seeder scripts
+COPY fixtures/test-data.sql /app/fixtures/
+COPY seed-staging.sh /app/
+
+# Make script executable
+RUN chmod +x /app/seed-staging.sh
+
+# Run seeder script
+CMD ["/app/seed-staging.sh"]

@@ -122,8 +122,8 @@ export class EventBusService extends EventEmitter {
     this.config = config;
     this.logger = logger;
     
-    // Set max listeners
-    this.setMaxListeners(config.maxListeners);
+    // EventEmitter3 doesn't have setMaxListeners, but we can track it
+    // this.setMaxListeners(config.maxListeners);
     
     // Start event processor
     this.startEventProcessor();

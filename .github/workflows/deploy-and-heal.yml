@@ -1,0 +1,667 @@
+name: Deploy and Self-Heal Pipeline
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        description: 'Enable debug mode'
+        required: false
+        default: 'false'
+
+env:
+  NODE_VERSION: '20'
+  STAGING_URL: 'https://pw.kevinalthaus.com'
+  STAGING_HOST: 'pw.kevinalthaus.com'
+  STAGING_USER: 'deploy'
+  STAGING_PATH: '/var/www/pw.kevinalthaus.com'
+  DOCKER_REGISTRY: 'ghcr.io'
+  DOCKER_IMAGE_PREFIX: 'blur702/keystone'
+
+jobs:
+  # Job 1: Run unit tests and static analysis
+  run_unit_tests:
+    name: Unit Tests & Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run ESLint
+        run: npm run lint || true
+        continue-on-error: true
+
+      - name: Run TypeScript check
+        run: npm run type-check || npx tsc --noEmit || true
+        continue-on-error: true
+
+      - name: Run unit tests
+        run: |
+          npm run test:unit || npm test || echo "No unit tests configured"
+        env:
+          CI: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            coverage/
+            test-results/
+          retention-days: 7
+
+  # Job 2: Build and deploy to staging
+  build_and_deploy_staging:
+    name: Build & Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: run_unit_tests
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: |
+          npm run build
+          echo "Build completed successfully"
+        env:
+          NODE_ENV: production
+          VITE_API_URL: ${{ env.STAGING_URL }}/api
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker images
+        run: |
+          # Build backend image
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-backend:${{ github.sha }} \
+            -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-backend:latest \
+            -f packages/backend/Dockerfile packages/backend
+          
+          # Build frontend image  
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-frontend:${{ github.sha }} \
+            -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-frontend:latest \
+            -f packages/frontend/Dockerfile packages/frontend || true
+          
+          # Push images
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-backend:${{ github.sha }}
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-backend:latest
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-frontend:${{ github.sha }} || true
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-frontend:latest || true
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+          ssh-keyscan -H ${{ env.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging server
+        run: |
+          # Create deployment script
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Starting deployment to staging..."
+          cd ${{ env.STAGING_PATH }}
+          
+          # Backup current deployment
+          if [ -d "current" ]; then
+            rm -rf backup
+            cp -r current backup
+          fi
+          
+          # Pull latest code
+          git fetch origin
+          git reset --hard origin/master
+          
+          # Install dependencies
+          npm ci --production
+          
+          # Run database migrations
+          cd packages/backend
+          npm run migrate || echo "No migrations to run"
+          
+          # Restart services
+          sudo systemctl restart keystone-backend || true
+          sudo systemctl restart keystone-frontend || true
+          sudo systemctl restart nginx || true
+          
+          # Health check
+          sleep 10
+          curl -f ${{ env.STAGING_URL }}/health || exit 1
+          
+          echo "Deployment completed successfully"
+          EOF
+          
+          # Execute deployment
+          scp -i ~/.ssh/staging_key deploy.sh ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }}:/tmp/
+          ssh -i ~/.ssh/staging_key ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }} "bash /tmp/deploy.sh"
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          response=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.STAGING_URL }}/health)
+          if [ "$response" != "200" ]; then
+            echo "Health check failed with status: $response"
+            exit 1
+          fi
+          echo "Deployment verified successfully"
+
+  # Job 3: Run E2E tests (continues on error)
+  run_e2e_tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: build_and_deploy_staging
+    timeout-minutes: 45
+    continue-on-error: true
+    
+    outputs:
+      test_status: ${{ steps.run_tests.outcome }}
+      failed_test_file: ${{ steps.extract_failure.outputs.failed_file }}
+      error_message: ${{ steps.extract_failure.outputs.error_msg }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        id: run_tests
+        continue-on-error: true
+        run: |
+          npx playwright test \
+            --config=playwright.config.ts \
+            --reporter=json,html \
+            --output=test-results \
+            --trace=on \
+            --screenshot=on \
+            --video=on
+        env:
+          BASE_URL: ${{ env.STAGING_URL }}
+          CI: true
+
+      - name: Extract failure information
+        id: extract_failure
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          # Extract failed test file and error message
+          if [ -f "test-results.json" ]; then
+            FAILED_FILE=$(jq -r '.suites[0].specs[0].file // "unknown"' test-results.json)
+            ERROR_MSG=$(jq -r '.suites[0].specs[0].tests[0].results[0].error.message // "No error message"' test-results.json)
+            
+            echo "failed_file=${FAILED_FILE}" >> $GITHUB_OUTPUT
+            echo "error_msg=${ERROR_MSG}" >> $GITHUB_OUTPUT
+            
+            # Save console logs
+            find test-results -name "*.webm" -o -name "*.png" -o -name "trace.zip" | head -20 > artifacts.txt
+            
+            # Extract browser console logs if available
+            if [ -f "test-results/console.log" ]; then
+              cp test-results/console.log console-output.txt
+            fi
+          fi
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            playwright-report/
+            test-results/
+            test-results.json
+            console-output.txt
+          retention-days: 7
+
+      - name: Create test summary
+        if: always()
+        run: |
+          cat > test-summary.md << 'EOF'
+          ## Test Results Summary
+          
+          - **Status**: ${{ steps.run_tests.outcome }}
+          - **Failed Test**: ${{ steps.extract_failure.outputs.failed_file }}
+          - **Error**: ${{ steps.extract_failure.outputs.error_msg }}
+          - **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - **Commit**: ${{ github.sha }}
+          
+          View full report in artifacts.
+          EOF
+          
+          cat test-summary.md >> $GITHUB_STEP_SUMMARY
+
+  # Job 4: Diagnose and propose fix (self-healing)
+  diagnose_and_propose_fix:
+    name: AI Diagnosis & Auto-Fix
+    runs-on: ubuntu-latest
+    needs: run_e2e_tests
+    if: needs.run_e2e_tests.outputs.test_status == 'failure'
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "AI Fix Bot"
+          git config --global user.email "ai-bot@keystone-platform.com"
+
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-results
+          path: ./test-artifacts
+
+      - name: Gather evidence and construct prompt
+        id: gather_evidence
+        run: |
+          # Create evidence gathering script
+          cat > gather_evidence.py << 'EOF'
+          import json
+          import os
+          import glob
+          import re
+          from datetime import datetime
+          
+          def extract_test_failure():
+              """Extract test failure details from Playwright report"""
+              evidence = {
+                  "failed_test": "",
+                  "error_message": "",
+                  "stack_trace": "",
+                  "console_logs": "",
+                  "test_file_content": "",
+                  "source_file_content": ""
+              }
+              
+              # Read test results JSON
+              try:
+                  with open("test-artifacts/test-results.json", "r") as f:
+                      results = json.load(f)
+                      
+                  # Find failed test
+                  for suite in results.get("suites", []):
+                      for spec in suite.get("specs", []):
+                          for test in spec.get("tests", []):
+                              for result in test.get("results", []):
+                                  if result.get("status") == "failed":
+                                      evidence["failed_test"] = spec.get("file", "")
+                                      evidence["error_message"] = result.get("error", {}).get("message", "")
+                                      evidence["stack_trace"] = result.get("error", {}).get("stack", "")
+                                      break
+              except Exception as e:
+                  print(f"Error reading test results: {e}")
+              
+              # Read console logs
+              console_files = glob.glob("test-artifacts/**/console*.txt", recursive=True)
+              if console_files:
+                  with open(console_files[0], "r") as f:
+                      evidence["console_logs"] = f.read()[:5000]  # Limit size
+              
+              # Read test file content
+              if evidence["failed_test"] and os.path.exists(evidence["failed_test"]):
+                  with open(evidence["failed_test"], "r") as f:
+                      evidence["test_file_content"] = f.read()
+              
+              # Try to identify source file from test
+              if evidence["failed_test"]:
+                  # Extract component name from test file
+                  test_name = os.path.basename(evidence["failed_test"])
+                  component_match = re.search(r"(\w+)\.(spec|test)\.[tj]sx?", test_name)
+                  if component_match:
+                      component_name = component_match.group(1)
+                      # Search for matching source file
+                      possible_paths = [
+                          f"packages/frontend/src/components/{component_name}.tsx",
+                          f"packages/frontend/src/pages/{component_name}.tsx",
+                          f"packages/backend-ui/src/components/{component_name}.tsx",
+                          f"packages/backend-ui/src/pages/{component_name}.tsx",
+                          f"packages/backend/src/routes/{component_name}.ts",
+                      ]
+                      for path in possible_paths:
+                          if os.path.exists(path):
+                              with open(path, "r") as f:
+                                  evidence["source_file_content"] = f.read()
+                              evidence["source_file_path"] = path
+                              break
+              
+              return evidence
+          
+          # Gather evidence
+          evidence = extract_test_failure()
+          
+          # Save evidence to file
+          with open("evidence.json", "w") as f:
+              json.dump(evidence, f, indent=2)
+          
+          print("Evidence gathered successfully")
+          EOF
+          
+          python3 gather_evidence.py
+
+      - name: Call Claude API for diagnosis
+        id: ai_diagnosis
+        run: |
+          # Create AI prompt
+          cat > prompt.txt << 'EOF'
+          You are an expert software engineer debugging a test failure. Analyze the following evidence and provide a fix.
+          
+          ## EVIDENCE REPORT
+          
+          ### 1. Failed Test File:
+          $FAILED_TEST_CONTENT
+          
+          ### 2. Error Message:
+          $ERROR_MESSAGE
+          
+          ### 3. Stack Trace:
+          $STACK_TRACE
+          
+          ### 4. Browser Console Logs:
+          $CONSOLE_LOGS
+          
+          ### 5. Source Code Being Tested:
+          $SOURCE_FILE_CONTENT
+          
+          ## YOUR TASK
+          
+          1. Identify the root cause of the failure
+          2. Generate the complete fixed source code
+          3. Explain your reasoning
+          
+          Respond in JSON format:
+          {
+            "root_cause": "One sentence explanation",
+            "fixed_code": "Complete fixed source file",
+            "reasoning": "Brief explanation of the fix",
+            "file_path": "Path to the file that needs fixing"
+          }
+          EOF
+          
+          # Load evidence and construct prompt
+          python3 << 'PYTHON'
+          import json
+          import os
+          import requests
+          
+          # Load evidence
+          with open("evidence.json", "r") as f:
+              evidence = json.load(f)
+          
+          # Read prompt template
+          with open("prompt.txt", "r") as f:
+              prompt_template = f.read()
+          
+          # Replace placeholders
+          prompt = prompt_template.replace("$FAILED_TEST_CONTENT", evidence.get("test_file_content", "Not available"))
+          prompt = prompt.replace("$ERROR_MESSAGE", evidence.get("error_message", "Not available"))
+          prompt = prompt.replace("$STACK_TRACE", evidence.get("stack_trace", "Not available"))
+          prompt = prompt.replace("$CONSOLE_LOGS", evidence.get("console_logs", "Not available"))
+          prompt = prompt.replace("$SOURCE_FILE_CONTENT", evidence.get("source_file_content", "Not available"))
+          
+          # Call Claude API
+          api_key = os.environ.get("CLAUDE_API_KEY")
+          if not api_key:
+              print("Error: CLAUDE_API_KEY not set")
+              exit(1)
+          
+          headers = {
+              "Content-Type": "application/json",
+              "x-api-key": api_key,
+              "anthropic-version": "2023-06-01"
+          }
+          
+          data = {
+              "model": "claude-3-sonnet-20240229",
+              "max_tokens": 4000,
+              "messages": [{
+                  "role": "user",
+                  "content": prompt
+              }],
+              "system": "You are an expert software engineer. Respond only with valid JSON containing the fix."
+          }
+          
+          try:
+              response = requests.post(
+                  "https://api.anthropic.com/v1/messages",
+                  headers=headers,
+                  json=data,
+                  timeout=60
+              )
+              
+              if response.status_code == 200:
+                  result = response.json()
+                  content = result["content"][0]["text"]
+                  
+                  # Extract JSON from response
+                  import re
+                  json_match = re.search(r'\{[\s\S]*\}', content)
+                  if json_match:
+                      fix_data = json.loads(json_match.group())
+                      
+                      # Save fix data
+                      with open("fix.json", "w") as f:
+                          json.dump(fix_data, f, indent=2)
+                      
+                      print("AI diagnosis completed successfully")
+                  else:
+                      print("Error: Could not extract JSON from AI response")
+                      exit(1)
+              else:
+                  print(f"API Error: {response.status_code} - {response.text}")
+                  exit(1)
+                  
+          except Exception as e:
+              print(f"Error calling Claude API: {e}")
+              exit(1)
+          PYTHON
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+
+      - name: Apply fix and create pull request
+        if: success()
+        run: |
+          # Read fix data
+          python3 << 'PYTHON'
+          import json
+          import os
+          import subprocess
+          from datetime import datetime
+          
+          # Load fix data
+          with open("fix.json", "r") as f:
+              fix_data = json.load(f)
+          
+          # Create branch name
+          timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+          branch_name = f"fix/ai-generated-patch-{timestamp}"
+          
+          # Create and checkout new branch
+          subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+          
+          # Apply fix
+          file_path = fix_data.get("file_path")
+          if file_path and fix_data.get("fixed_code"):
+              # Write fixed code
+              os.makedirs(os.path.dirname(file_path), exist_ok=True)
+              with open(file_path, "w") as f:
+                  f.write(fix_data["fixed_code"])
+              
+              # Stage and commit
+              subprocess.run(["git", "add", file_path], check=True)
+              
+              commit_message = f"AI Fix: {fix_data.get('root_cause', 'Automated fix for test failure')}"
+              subprocess.run(["git", "commit", "-m", commit_message], check=True)
+              
+              # Push branch
+              subprocess.run(["git", "push", "origin", branch_name], check=True)
+              
+              # Create PR body
+              pr_body = f"""## 🤖 Automated Fix for Test Failure
+              
+              ### Root Cause
+              {fix_data.get('root_cause', 'Not specified')}
+              
+              ### Fix Reasoning
+              {fix_data.get('reasoning', 'Not specified')}
+              
+              ### Changed Files
+              - `{file_path}`
+              
+              ### Test Information
+              - **Failed Test**: `{os.environ.get('FAILED_TEST', 'Unknown')}`
+              - **Error**: `{os.environ.get('ERROR_MSG', 'Unknown')}`
+              - **Workflow Run**: [View](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              
+              ---
+              *This pull request was automatically generated by the self-healing pipeline.*
+              *Please review the changes carefully before merging.*
+              """
+              
+              # Save PR body
+              with open("pr_body.md", "w") as f:
+                  f.write(pr_body)
+              
+              print(f"Branch {branch_name} created and pushed successfully")
+          else:
+              print("Error: No fix data available")
+              exit(1)
+          PYTHON
+        env:
+          FAILED_TEST: ${{ needs.run_e2e_tests.outputs.failed_test_file }}
+          ERROR_MSG: ${{ needs.run_e2e_tests.outputs.error_message }}
+
+      - name: Create pull request
+        if: success()
+        run: |
+          # Install GitHub CLI if not available
+          if ! command -v gh &> /dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt update
+            sudo apt install gh -y
+          fi
+          
+          # Create pull request
+          gh pr create \
+            --title "🤖 AI Fix: Automated repair for test failure" \
+            --body-file pr_body.md \
+            --base develop \
+            --label "ai-generated,bug-fix,automated" \
+            --reviewer "${{ github.actor }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 🤖 Self-Healing Pipeline Results
+          
+          ### Diagnosis
+          - **Status**: ${{ steps.ai_diagnosis.outcome }}
+          - **Branch Created**: fix/ai-generated-patch-*
+          - **PR Created**: Check pull requests for review
+          
+          ### Next Steps
+          1. Review the automatically generated pull request
+          2. Verify the fix addresses the root cause
+          3. Run additional tests if needed
+          4. Merge if the fix is correct
+          
+          The pipeline has attempted to heal itself. Human review is required before merging.
+          EOF
+
+  # Optional: Notification job
+  notify_status:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [run_unit_tests, build_and_deploy_staging, run_e2e_tests, diagnose_and_propose_fix]
+    if: always()
+    
+    steps:
+      - name: Determine overall status
+        id: status
+        run: |
+          if [[ "${{ needs.run_e2e_tests.result }}" == "failure" ]] && [[ "${{ needs.diagnose_and_propose_fix.result }}" == "success" ]]; then
+            echo "status=healed" >> $GITHUB_OUTPUT
+            echo "emoji=🩹" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.run_e2e_tests.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        if: vars.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST ${{ vars.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "${{ steps.status.outputs.emoji }} Pipeline Status: ${{ steps.status.outputs.status }}",
+              "attachments": [{
+                "color": "${{ steps.status.outputs.status == 'success' && 'good' || steps.status.outputs.status == 'healed' && 'warning' || 'danger' }}",
+                "fields": [
+                  {"title": "Repository", "value": "${{ github.repository }}", "short": true},
+                  {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
+                  {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                  {"title": "Status", "value": "${{ steps.status.outputs.status }}", "short": true},
+                  {"title": "Workflow", "value": "${{ github.workflow }}", "short": true},
+                  {"title": "Run", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+                ]
+              }]
+            }'

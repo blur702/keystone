@@ -15,7 +15,7 @@ RUN npm install --omit=dev && \
 COPY src ./src
 COPY migrations ./migrations
 
-# Build TypeScript (skip for now, copying source directly)
+# Build TypeScript - Skip for now, using prebuilt dist
 # RUN npm run build
 
 # Production stage
@@ -33,9 +33,9 @@ COPY package*.json ./
 RUN npm install --omit=dev && \
     npm cache clean --force
 
-# Copy application and migrations (using source directly for now)
-COPY --from=builder /app/src ./dist
-COPY --from=builder /app/migrations ./migrations
+# Copy dist folder directly (prebuilt)
+COPY dist ./dist
+COPY migrations ./migrations
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \

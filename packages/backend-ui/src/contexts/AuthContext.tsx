@@ -19,7 +19,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// Use relative path for production, absolute for development
+const API_URL = import.meta.env.VITE_API_URL || (
+  window.location.hostname === 'localhost' ? 'http://localhost:3000/api' : '/api'
+);
 
 // Configure axios defaults
 axios.defaults.baseURL = API_URL;

@@ -1,0 +1,318 @@
+name: Deploy and Test Staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests after deployment'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  STAGING_HOST: pw.kevinalthaus.com
+  STAGING_PATH: /var/www/pw.kevinalthaus.com
+  NODE_VERSION: '18'
+  POSTGRES_VERSION: '15'
+
+jobs:
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run linting
+        run: npm run lint
+        
+      - name: Run type checking
+        run: npm run type-check
+        
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+        env:
+          CI: true
+          
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          
+      - name: Check coverage thresholds
+        run: |
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          echo "Coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Coverage is below 80% threshold"
+            exit 1
+          fi
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:staging
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: Build and push backend-ui image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./packages/backend-ui
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend-ui:staging
+            ghcr.io/${{ github.repository }}/backend-ui:${{ github.sha }}
+          build-args: |
+            VITE_API_URL=https://pw.kevinalthaus.com/api
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: staging
+      url: https://pw.kevinalthaus.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to staging server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd ${{ env.STAGING_PATH }}
+            
+            # Pull latest code
+            git fetch origin develop
+            git reset --hard origin/develop
+            
+            # Update images
+            docker compose -f docker-compose.staging.yml pull
+            
+            # Run database migrations
+            docker compose -f docker-compose.staging.yml run --rm backend node dist/migrate.js
+            
+            # Deploy with zero downtime
+            docker compose -f docker-compose.staging.yml up -d --no-deps --scale backend=2 backend
+            sleep 10
+            docker compose -f docker-compose.staging.yml up -d --no-deps backend-ui
+            
+            # Health check
+            for i in {1..30}; do
+              if curl -f https://pw.kevinalthaus.com/health; then
+                echo "Deployment successful"
+                break
+              fi
+              echo "Waiting for services to be healthy..."
+              sleep 5
+            done
+            
+            # Cleanup old containers
+            docker system prune -af --filter "until=24h"
+
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ !github.event.inputs.skip_tests }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
+          
+      - name: Run E2E tests
+        run: |
+          npx playwright test \
+            --shard=${{ matrix.shard }}/4 \
+            --reporter=blob
+        env:
+          PLAYWRIGHT_BASE_URL: https://pw.kevinalthaus.com
+          CI: true
+          
+      - name: Upload blob report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 7
+
+  merge-reports:
+    name: Merge Test Reports
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          
+      - name: Merge reports
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+        
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 30
+          
+      - name: Deploy report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./playwright-report
+          destination_dir: reports/${{ github.run_number }}
+
+  accessibility-audit:
+    name: Accessibility Audit
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install chromium
+          
+      - name: Run accessibility tests
+        run: npx playwright test tests/accessibility.spec.ts
+        env:
+          PLAYWRIGHT_BASE_URL: https://pw.kevinalthaus.com
+          
+      - name: Upload accessibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-report
+          path: accessibility-report
+          retention-days: 30
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+          
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+
+  notify:
+    name: Notify Status
+    runs-on: ubuntu-latest
+    needs: [e2e-tests, accessibility-audit]
+    if: always()
+    
+    steps:
+      - name: Send Slack notification
+        if: ${{ secrets.SLACK_WEBHOOK_URL }}
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Staging Deployment: ${{ needs.deploy.result }}
+            E2E Tests: ${{ needs.e2e-tests.result }}
+            Accessibility: ${{ needs.accessibility-audit.result }}
+            Report: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/${{ github.run_number }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          channel: '#deployments'

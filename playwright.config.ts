@@ -33,8 +33,8 @@ export default defineConfig({
   
   // Shared settings for all tests
   use: {
-    // Base URL for tests
-    baseURL: 'https://pw.kevinalthaus.com',
+    // Base URL for tests - staging environment
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://pw.kevinalthaus.com',
     
     // Browser context options
     viewport: { width: 1280, height: 720 },
@@ -49,10 +49,21 @@ export default defineConfig({
     trace: 'on-first-retry',
     
     // Global timeout for actions
-    actionTimeout: 10000,
+    actionTimeout: 15000,
     
     // Global timeout for navigation
     navigationTimeout: 30000,
+    
+    // Realistic browser settings
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    permissions: ['clipboard-read', 'clipboard-write'],
+    
+    // Strict mode for selectors
+    strict: true,
+    
+    // Accept downloads during tests
+    acceptDownloads: true,
   },
 
   // Global test timeout

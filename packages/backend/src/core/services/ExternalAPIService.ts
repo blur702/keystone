@@ -231,7 +231,7 @@ export class ExternalAPIService {
         endpoint: config.url || '',
         method: config.method || 'GET',
         params: config.params,
-        headers: config.headers,
+        headers: config.headers as Record<string, string> | undefined,
         data: config.data,
         timestamp: new Date(),
       });

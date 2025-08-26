@@ -53,6 +53,13 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+// Redis configuration
+const redisConfig = {
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  password: process.env.REDIS_PASSWORD
+};
+
 // Global plugin loader instance
 let pluginLoader: PluginLoader;
 
@@ -85,25 +92,53 @@ const initializeServices = async () => {
     logger.info('Database connected');
 
     // Initialize core services
-    const dbService = new DatabaseService(pool, logger);
+    const dbService = DatabaseService.getInstance(
+      { 
+        postgres: {
+          host: process.env.DB_HOST || 'postgres',
+          port: parseInt(process.env.DB_PORT || '5432'),
+          database: process.env.DB_NAME || 'keystone',
+          user: process.env.DB_USER || 'keystone',
+          password: process.env.DB_PASSWORD || 'keystone',
+          max: 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        }, 
+        redis: redisConfig 
+      },
+      logger
+    );
     await dbService.initialize();
     
-    const eventBus = EventBusService.getInstance(logger);
-    
-    const emailService = new EmailService(
-      {
-        apiKey: process.env.EMAIL_API_KEY || '',
-        apiSecret: process.env.EMAIL_API_SECRET || '',
-        defaultFrom: process.env.EMAIL_FROM || 'noreply@kevinalthaus.com',
-        webhookUrl: process.env.EMAIL_WEBHOOK_URL || '',
-        dailyLimit: parseInt(process.env.EMAIL_DAILY_LIMIT || '1000'),
-      },
+    const eventBus = EventBusService.getInstance(
       dbService,
-      eventBus,
+      {
+        maxListeners: 100,
+        persistEvents: true,
+        retryAttempts: 3,
+        retryDelay: 1000,
+      },
       logger
     );
     
-    const externalAPIService = new ExternalAPIService(dbService, logger);
+    const emailService = EmailService.getInstance(
+      dbService,
+      {
+        brevoApiKey: process.env.BREVO_API_KEY || '',
+        brevoWebhookSecret: process.env.BREVO_WEBHOOK_SECRET || '',
+        defaultFromEmail: process.env.EMAIL_FROM || 'noreply@kevinalthaus.com',
+        defaultFromName: process.env.EMAIL_FROM_NAME || 'Keystone Platform',
+        webhookUrl: process.env.EMAIL_WEBHOOK_URL || '',
+      },
+      logger
+    );
+    
+    const externalAPIService = ExternalAPIService.getInstance(
+      dbService, 
+      eventBus,
+      logger,
+      process.env.ENCRYPTION_KEY || 'default-encryption-key-change-in-production'
+    );
 
     // Initialize auth service
     const authConfig = {
