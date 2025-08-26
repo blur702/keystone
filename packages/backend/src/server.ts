@@ -5,10 +5,18 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import winston from 'winston';
+import path from 'path';
+import * as fs from 'fs';
 import { AuthenticationService } from './core/services/AuthenticationService';
+import { DatabaseService } from './core/services/DatabaseService';
+import { EventBusService } from './core/services/EventBusService';
+import { EmailService } from './core/services/EmailService';
+import { ExternalAPIService } from './core/services/ExternalAPIService';
+import { PluginLoader } from './core/PluginLoader';
 import { metricsMiddleware, metricsEndpoint } from './middleware/metrics';
 import authRoutes from './routes/auth';
 import grafanaAuthRoutes from './routes/grafana-auth';
+import pluginRoutes from './routes/plugins';
 
 dotenv.config();
 
@@ -45,22 +53,8 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Simplified DatabaseService for minimal MVP
-class SimpleDatabaseService {
-  private pool: Pool;
-
-  constructor(pool: Pool) {
-    this.pool = pool;
-  }
-
-  async query<T = any>(text: string, params?: any[], options?: any) {
-    return this.pool.query<T>(text, params);
-  }
-
-  async deleteFromCache(pattern: string) {
-    // No-op for minimal MVP (no Redis)
-  }
-}
+// Global plugin loader instance
+let pluginLoader: PluginLoader;
 
 // Middleware
 app.use(helmet());
@@ -90,8 +84,28 @@ const initializeServices = async () => {
     await pool.query('SELECT 1');
     logger.info('Database connected');
 
+    // Initialize core services
+    const dbService = new DatabaseService(pool, logger);
+    await dbService.initialize();
+    
+    const eventBus = EventBusService.getInstance(logger);
+    
+    const emailService = new EmailService(
+      {
+        apiKey: process.env.EMAIL_API_KEY || '',
+        apiSecret: process.env.EMAIL_API_SECRET || '',
+        defaultFrom: process.env.EMAIL_FROM || 'noreply@kevinalthaus.com',
+        webhookUrl: process.env.EMAIL_WEBHOOK_URL || '',
+        dailyLimit: parseInt(process.env.EMAIL_DAILY_LIMIT || '1000'),
+      },
+      dbService,
+      eventBus,
+      logger
+    );
+    
+    const externalAPIService = new ExternalAPIService(dbService, logger);
+
     // Initialize auth service
-    const dbService = new SimpleDatabaseService(pool);
     const authConfig = {
       jwtSecret: process.env.JWT_SECRET || 'change-this-secret-in-production',
       jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',
@@ -101,7 +115,7 @@ const initializeServices = async () => {
     };
 
     const authService = AuthenticationService.getInstance(
-      dbService as any,
+      dbService,
       authConfig,
       logger
     );
@@ -109,15 +123,181 @@ const initializeServices = async () => {
     await authService.initialize();
     logger.info('Authentication service initialized');
 
-    // Make auth service available to routes
+    // Make services available to routes
     app.set('authService', authService);
+    app.set('dbService', dbService);
+    app.set('eventBus', eventBus);
+    app.set('emailService', emailService);
+    app.set('externalAPIService', externalAPIService);
     app.set('logger', logger);
 
-    // Routes
+    // Core API Routes (before plugin routes)
+    app.use('/auth', authRoutes);
     app.use('/api/auth', authRoutes);
     app.use('/api/grafana', grafanaAuthRoutes);
 
-    // Error handling middleware
+    // =================================================================
+    // PLUGIN SYSTEM INITIALIZATION AND ROUTE MOUNTING
+    // =================================================================
+    
+    logger.info('Initializing plugin system...');
+    
+    const pluginsDir = path.join(__dirname, 'plugins');
+    
+    // Create plugin loader instance
+    pluginLoader = new PluginLoader(
+      app,
+      {
+        db: dbService,
+        eventBus,
+        email: emailService,
+        externalAPI: externalAPIService,
+      },
+      logger,
+      pluginsDir
+    );
+
+    // Initialize plugin loader (discovers and loads plugins)
+    await pluginLoader.initialize();
+    
+    // Get all enabled plugins and mount their routes correctly
+    const allPlugins = await pluginLoader.getAllPlugins();
+    
+    for (const plugin of allPlugins) {
+      if (plugin.isEnabled && plugin.metadata) {
+        const pluginName = plugin.name;
+        const pluginPath = path.join(pluginsDir, pluginName);
+        
+        try {
+          // Check if plugin has routes defined in metadata
+          if (plugin.metadata.routes && plugin.metadata.routes.length > 0) {
+            logger.info(`Mounting routes for plugin: ${pluginName}`);
+            
+            // Load each route file specified in the metadata
+            for (const routeFile of plugin.metadata.routes) {
+              const routePath = path.join(pluginPath, routeFile);
+              
+              // Check if route file exists
+              if (fs.existsSync(routePath)) {
+                // Clear require cache for hot reloading
+                delete require.cache[require.resolve(routePath)];
+                
+                // Load the route module
+                const routeModule = require(routePath);
+                const router = routeModule.default || routeModule;
+                
+                // Mount at the correct paths
+                // Primary path: /api/{plugin-name}
+                app.use(`/api/${pluginName}`, router);
+                
+                // Also mount at /api/plugins/{plugin-name} for backward compatibility
+                app.use(`/api/plugins/${pluginName}`, router);
+                
+                logger.info(`  - Mounted ${routeFile} at /api/${pluginName} and /api/plugins/${pluginName}`);
+              } else {
+                logger.warn(`  - Route file not found: ${routePath}`);
+              }
+            }
+          }
+          
+          // Alternative: Check for a getRouter method (for plugins using the module pattern)
+          const indexPath = path.join(pluginPath, 'index.js');
+          if (fs.existsSync(indexPath)) {
+            delete require.cache[require.resolve(indexPath)];
+            const pluginModule = require(indexPath);
+            const module = pluginModule.default || pluginModule;
+            
+            if (module.getRouter && typeof module.getRouter === 'function') {
+              const router = module.getRouter();
+              
+              // Mount at both paths
+              app.use(`/api/${pluginName}`, router);
+              app.use(`/api/plugins/${pluginName}`, router);
+              
+              logger.info(`  - Mounted dynamic router at /api/${pluginName} and /api/plugins/${pluginName}`);
+            }
+          }
+        } catch (error) {
+          logger.error(`Failed to mount routes for plugin ${pluginName}:`, error);
+        }
+      }
+    }
+    
+    // Special handling for address-validator plugin (ensure it's always available for testing)
+    try {
+      const addressValidatorPath = path.join(pluginsDir, 'address-validator');
+      if (fs.existsSync(addressValidatorPath)) {
+        const manifestPath = path.join(addressValidatorPath, 'manifest.json');
+        const pluginJsonPath = path.join(addressValidatorPath, 'plugin.json');
+        
+        // Try to load metadata from either manifest.json or plugin.json
+        let metadata: any = null;
+        if (fs.existsSync(manifestPath)) {
+          metadata = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        } else if (fs.existsSync(pluginJsonPath)) {
+          metadata = JSON.parse(fs.readFileSync(pluginJsonPath, 'utf-8'));
+        }
+        
+        if (metadata && metadata.routes) {
+          for (const routeFile of metadata.routes) {
+            const routePath = path.join(addressValidatorPath, routeFile);
+            if (fs.existsSync(routePath)) {
+              delete require.cache[require.resolve(routePath)];
+              const routeModule = require(routePath);
+              const router = routeModule.default || routeModule;
+              
+              // Ensure address-validator is accessible at the expected path
+              app.use('/api/address-validator', router);
+              logger.info('Address validator plugin forcefully mounted at /api/address-validator');
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('Could not force-mount address-validator:', error);
+    }
+    
+    // Make plugin loader available globally
+    app.set('pluginLoader', pluginLoader);
+    
+    // Plugin management API routes
+    app.use('/api/plugins', pluginRoutes);
+    app.use('/plugins', pluginRoutes);
+    
+    logger.info('Plugin system initialized successfully');
+    
+    // Log all mounted routes for debugging
+    logger.info('All mounted routes:');
+    app._router.stack.forEach((middleware: any) => {
+      if (middleware.route) {
+        const methods = Object.keys(middleware.route.methods).join(', ').toUpperCase();
+        logger.info(`  ${methods} ${middleware.route.path}`);
+      } else if (middleware.name === 'router' && middleware.regexp) {
+        const path = middleware.regexp.toString()
+          .replace('/^', '')
+          .replace('\\/', '/')
+          .replace(/\$.*$/, '')
+          .replace(/\\/g, '');
+        logger.info(`  Router mounted at: ${path || middleware.regexp}`);
+      }
+    });
+
+    // =================================================================
+    // END OF PLUGIN SYSTEM
+    // =================================================================
+
+    // 404 handler (must be after all routes)
+    app.use((req, res) => {
+      logger.warn(`404 Not Found: ${req.method} ${req.path}`);
+      res.status(404).json({ 
+        error: 'Not Found',
+        message: `Route ${req.path} not found`,
+        method: req.method 
+      });
+    });
+
+    // Error handling middleware (must be last)
     app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
       logger.error('Error:', err);
       res.status(err.status || 500).json({
@@ -127,9 +307,47 @@ const initializeServices = async () => {
     });
 
     // Start server
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       logger.info(`Backend server running on port ${PORT}`);
+      logger.info(`Plugin system initialized with dynamic route mounting`);
+      logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
+
+    // Graceful shutdown handler
+    const gracefulShutdown = async (signal: string) => {
+      logger.info(`${signal} received, starting graceful shutdown...`);
+      
+      // Stop accepting new connections
+      server.close(() => {
+        logger.info('HTTP server closed');
+      });
+
+      // Clean up plugins
+      if (pluginLoader) {
+        try {
+          const plugins = await pluginLoader.getAllPlugins();
+          for (const plugin of plugins) {
+            if (plugin.isEnabled) {
+              await pluginLoader.disablePlugin(plugin.name);
+            }
+          }
+          logger.info('All plugins disabled');
+        } catch (error) {
+          logger.error('Error disabling plugins:', error);
+        }
+      }
+
+      // Close database connection
+      await pool.end();
+      logger.info('Database connection closed');
+      
+      process.exit(0);
+    };
+
+    // Register shutdown handlers
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
   } catch (error) {
     logger.error('Failed to initialize services:', error);
     process.exit(1);
@@ -139,11 +357,6 @@ const initializeServices = async () => {
 // Start the application
 initializeServices();
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  await pool.end();
-  process.exit(0);
-});
-
+// Export for testing
 export default app;
+export { pluginLoader };
