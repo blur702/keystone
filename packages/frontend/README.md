@@ -1,11 +1,12 @@
 # @keystone/frontend
 
-Public-facing React application for end users.
+Public-facing React application for end users, deployed at https://kevinalthaus.com/
 
 ## Overview
 
 This package contains the frontend application responsible for:
 - User interface and experience
+- Plugin-based content display
 - Client-side routing
 - State management
 - API integration with backend services
@@ -33,7 +34,7 @@ frontend/
 # Install dependencies
 npm install
 
-# Run development server
+# Run development server (port 5173)
 npm run dev
 
 # Run tests
@@ -41,6 +42,10 @@ npm test
 
 # Build for production
 npm run build
+
+# Deploy to production
+sudo cp -r dist/* /var/www/kevinalthaus.com/public/
+sudo systemctl reload nginx
 ```
 
 ## Environment Variables

@@ -1,214 +1,317 @@
-# CLAUDE.md
+# CLAUDE.md - Keystone Project Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Overview
+Keystone is an enterprise-grade monorepo application with a plugin architecture, built using Turborepo. It consists of a public frontend, admin backend UI, Node.js API server, and Python services. The system supports dynamic plugin loading and management through a comprehensive UI.
 
-## System Information
-- sudo password: (130Bpm)
-- Production domain: https://kevinalthaus.com
-- Testing domain: https://pw.kevinalthaus.com
-- Production deployment: /var/www/kevinalthaus.com
-- Testing deployment: /var/www/pw.kevinalthaus.com
+## Quick Reference
 
-## Essential Commands
-
-### Development
+### Common Commands
 ```bash
-# Start all services in development mode with hot reload
-npm run dev
+# Development
+npm run dev                # Start all services
+npm run build             # Build all packages
+npm run test              # Run tests
+npm run lint              # Lint code
+npm run type-check        # TypeScript type checking
 
-# Start specific service only
-npm run dev --workspace=@keystone/backend
-npm run dev --workspace=@keystone/frontend
-npm run dev --workspace=@keystone/backend-ui
+# Backend specific (from packages/backend)
+npm run dev --workspace=@keystone/backend     # Run backend only
+npm start                 # Start production server (after build)
 
-# Run a single test file
-npm test -- path/to/test.spec.ts
-npm run test --workspace=@keystone/backend -- auth.test.ts
+# Admin UI specific (from packages/backend-ui) 
+npm run dev --workspace=@keystone/backend-ui  # Run admin UI only
+npm run build --workspace=@keystone/backend-ui # Build admin UI
+
+# Frontend specific (from packages/frontend)
+npm run dev --workspace=@keystone/frontend    # Run frontend only
+npm run build --workspace=@keystone/frontend  # Build frontend
 ```
 
-### Building & Deployment
+### Key URLs & Access
+- **Public Frontend**: https://kevinalthaus.com/
+- **Admin Backend**: https://kevinalthaus.com/admin/
+- **API**: https://kevinalthaus.com/api/
+- **Grafana**: https://kevinalthaus.com/grafana/
+- **Login**: kevin / (130Bpm)
+- **Sudo Password**: (130Bpm)
+
+## Architecture
+
+### Directory Structure
+```
+/home/kevin/keystone/
+├── packages/
+│   ├── backend/          # Node.js API server (port 3000)
+│   ├── backend-ui/       # Admin React app (dev port 5174)
+│   ├── frontend/         # Public React app (dev port 5173)
+│   └── python-services/  # Python calculation services
+├── turbo.json           # Turborepo configuration
+└── package.json         # Root monorepo config
+```
+
+### Deployment Locations
+```
+/var/www/kevinalthaus.com/
+├── public/              # Public frontend files
+├── admin/               # Admin UI files
+│   ├── index.html
+│   └── assets/         # Built JS/CSS files
+```
+
+### Database
+- **Type**: PostgreSQL
+- **Database**: keystone
+- **User**: keystone  
+- **Password**: keystone-dev-2024
+- **Plugins Table**: Stores plugin metadata and configuration
+
+### Environment Variables
+Key environment variables in `packages/backend/.env`:
+- **Database**: `DB_HOST=localhost`, `DB_PORT=5432`, `DB_NAME=keystone`, `DB_USER=keystone`, `DB_PASSWORD=keystone-dev-2024`
+- **Redis**: `REDIS_HOST=localhost`, `REDIS_PORT=6379`, `REDIS_PASSWORD=redis`
+- **JWT**: `JWT_SECRET=keystone-jwt-secret-dev-2024-very-long-string`, `JWT_EXPIRES_IN=15m`
+- **Email**: `BREVO_API_KEY` configured in .env file
+- **Google**: `GOOGLE_API_KEY` configured in .env file
+- **OAuth**: `OAUTH_CONSUMER_KEY`, `OAUTH_CONSUMER_SECRET` configured in .env file
+- **USPS**: Customer Registration ID and Mailer IDs configured in .env file
+- **CORS**: `CORS_ORIGIN=http://localhost:5173,http://localhost:5174,https://kevinalthaus.com`
+
+## Plugin System
+
+### Plugin Architecture
+The plugin system is implemented in `/home/kevin/keystone/packages/backend/src/core/PluginLoader.ts` and provides:
+
+1. **Dynamic Loading**: Plugins are discovered and loaded from `packages/backend/src/plugins/`
+2. **Metadata**: Each plugin requires a `plugin.json` or `manifest.json` file
+3. **Route Mounting**: Plugin routes are automatically mounted at `/api/{plugin-name}/`
+4. **Database Storage**: Plugin state stored in PostgreSQL `plugins` table
+5. **UI Management**: Admin UI at `/admin/plugins` for enable/disable functionality
+
+### Plugin Structure
+```
+packages/backend/src/plugins/{plugin-name}/
+├── plugin.json          # Plugin metadata
+├── index.js            # Main plugin file
+└── routes/             # Plugin API routes
+```
+
+### Plugin Metadata Format
+```json
+{
+  "name": "plugin-name",
+  "version": "1.0.0",
+  "description": "Plugin description",
+  "author": "Author name",
+  "dependencies": ["dependency1"],
+  "routes": ["routes/api.js"],
+  "permissions": ["plugins:read"]
+}
+```
+
+### Key Plugin Files
+- **PluginLoader**: `/home/kevin/keystone/packages/backend/src/core/PluginLoader.ts`
+- **Plugin Routes**: `/home/kevin/keystone/packages/backend/src/routes/plugins.ts`
+- **Plugin UI**: `/home/kevin/keystone/packages/backend-ui/src/pages/PluginsPage.tsx`
+- **Example Plugin**: `/home/kevin/keystone/packages/backend/src/plugins/address-validator/`
+
+## Authentication & Security
+
+### JWT Authentication
+- **Secret**: Configured in `JWT_SECRET` environment variable
+- **Expiry**: 15 minutes (access token), 7 days (refresh token)
+- **Endpoints**: `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`
+
+### RBAC System
+System roles defined in `AuthenticationService`:
+- `super_admin`: Full system access
+- `admin`: Administrative access (required for plugin management)
+- `user`: Regular user access
+- `guest`: Limited access
+
+### Permissions Format
+Permissions follow `resource:action` format:
+- `plugins:install`, `plugins:enable`, `plugins:disable`
+- `users:create`, `users:read`, `users:update`, `users:delete`
+- `roles:create`, `roles:read`, `roles:update`, `roles:delete`
+
+## Core Services
+
+### Backend Services (packages/backend/src/core/services/)
+1. **AuthenticationService**: JWT auth, RBAC, session management
+2. **DatabaseService**: PostgreSQL and Redis connections
+3. **EventBusService**: Inter-service event communication
+4. **EmailService**: Brevo (SendinBlue) email integration with API key in .env
+5. **ExternalAPIService**: Third-party API management
+6. **PluginService**: Plugin CRUD operations
+
+### Service Initialization
+Services are initialized in `packages/backend/src/server.ts`:
+1. Database connection established
+2. Core services instantiated as singletons
+3. Plugin system initialized
+4. Routes mounted (auth → plugins → 404 handler)
+
+## Technology Stack
+
+### Backend
+- **Runtime**: Node.js 20+
+- **Framework**: Express.js with TypeScript
+- **Database**: PostgreSQL with pg library
+- **Cache**: Redis with ioredis
+- **Auth**: JWT with jsonwebtoken, bcryptjs
+- **Validation**: Joi, express-validator
+- **Logging**: Winston
+- **Testing**: Jest
+
+### Admin UI (backend-ui)
+- **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite (base path: /admin/)
+- **UI Library**: Material-UI (@mui)
+- **State**: Zustand, React Query (TanStack Query)
+- **Forms**: React Hook Form with Zod validation
+- **Routing**: React Router v6
+- **HTTP**: Axios
+- **Testing**: Vitest
+
+### Frontend
+- **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite
+- **Testing**: Vitest
+
+### Infrastructure
+- **Web Server**: Nginx (reverse proxy)
+- **SSL**: Let's Encrypt certificates
+- **Process Manager**: Systemd or PM2
+- **Monorepo**: Turborepo
+
+## Nginx Configuration
+
+Location: `/etc/nginx/sites-available/kevinalthaus.com`
+
+Key routes:
+- `/admin/*` → Serves admin UI from `/var/www/kevinalthaus.com/admin/`
+- `/api/*` → Proxies to backend at `http://localhost:3000/`
+- `/auth/*` → Proxies to auth endpoints
+- `/grafana/*` → Proxies to Grafana at port 3001
+- `/` → Serves public frontend from `/var/www/kevinalthaus.com/public/`
+
+## Important Configuration Files
+
+### Backend Configuration
+- **Main Server**: `packages/backend/src/server.ts`
+- **Environment**: `packages/backend/.env` (not tracked)
+- **TypeScript**: `packages/backend/tsconfig.json`
+
+### Admin UI Configuration  
+- **Entry Point**: `packages/backend-ui/src/main.tsx`
+- **Vite Config**: `packages/backend-ui/vite.config.ts` (base: '/admin/')
+- **App Router**: `packages/backend-ui/src/App.tsx`
+
+### API Configuration
+- **Auth Service**: `packages/backend/src/core/services/AuthenticationService.ts`
+- **Plugin Loader**: `packages/backend/src/core/PluginLoader.ts`
+
+## Testing
+
+### Test Script
+Location: `/home/kevin/keystone/final-test.sh`
+
+Tests:
+1. Public frontend accessibility
+2. Admin backend loading
+3. Admin assets (CSS/JS) loading
+4. API endpoint responses
+5. Backend process status
+
+Run with: `bash /home/kevin/keystone/final-test.sh`
+
+## Deployment Process
+
+### Building for Production
 ```bash
-# Build all packages (uses Turborepo caching)
-npm run build
-
-# Deploy to production (from /var/www/kevinalthaus.com)
-docker compose -f docker-compose.minimal.yml build
-docker compose -f docker-compose.minimal.yml up -d
-
-# Deploy with full monitoring stack
-docker compose -f docker-compose.yml up -d
-
-# Restart specific service
-docker compose -f docker-compose.minimal.yml restart backend
+# From project root
+npm run build                          # Build all packages
 ```
 
-### Database Operations
+### Deploying Admin UI
 ```bash
-# Access production database
-docker exec -it keystone-postgres psql -U keystone -d keystone
-
-# Run migrations
-docker exec keystone-backend node dist/migrate.js
-
-# Create backup
-docker exec keystone-postgres pg_dump -U keystone keystone > backup.sql
+cd packages/backend-ui
+npm run build                          # Creates dist/ folder
+sudo cp -r dist/* /var/www/kevinalthaus.com/admin/
+sudo systemctl reload nginx
 ```
 
-### Testing & Quality
+### Deploying Frontend
 ```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:coverage
-
-# Lint and format
-npm run lint
-npm run format
-
-# Type checking
-npm run typecheck
+cd packages/frontend  
+npm run build                          # Creates dist/ folder
+sudo cp -r dist/* /var/www/kevinalthaus.com/public/
+sudo systemctl reload nginx
 ```
 
-### Monitoring & Logs
+### Starting Backend
 ```bash
-# View backend logs
-docker logs -f keystone-backend
-
-# Access Grafana dashboard
-# https://kevinalthaus.com/grafana/ (guest access enabled)
-
-# Access Prometheus metrics
-# https://kevinalthaus.com/prometheus/
+cd packages/backend
+npm run build                          # Compile TypeScript
+npm start                              # Start production server
+# OR with PM2
+pm2 start dist/server.js --name keystone-backend
 ```
 
-## Architecture Overview
+## Troubleshooting
 
-### Service Communication Flow
-```
-Internet → Nginx (SSL) → Services
-                      ├→ Backend API (port 3000)
-                      ├→ Frontend UI (port 5173)
-                      ├→ Backend UI (port 5174)
-                      ├→ Grafana (port 3001)
-                      └→ Prometheus (port 9090)
+### Common Issues
 
-Backend API → PostgreSQL (port 5432)
-           → Redis (port 6379)
-           → Python Services (port 8000)
-```
+1. **QueryClient Error in Admin UI**
+   - Ensure QueryClientProvider wraps the app in `main.tsx`
+   - Check that @tanstack/react-query is installed
 
-### Plugin System Architecture
-The platform uses a dynamic plugin system where plugins:
-1. Are loaded from `/packages/backend/src/plugins/` at runtime
-2. Register in the database with metadata and permissions
-3. Can hook into system events via EventBus
-4. Store settings in `plugin_settings` table
-5. Require specific permissions (format: `plugin:pluginName:action`)
+2. **Plugin Routes Not Found**
+   - Check plugin.json/manifest.json exists
+   - Verify routes array in metadata
+   - Ensure plugin is enabled in database
+   - Check server.ts for route mounting logic
 
-### Authentication & Authorization
-- JWT-based authentication with refresh tokens
-- RBAC with format: `resource:action` (e.g., `users:create`, `analytics:view`)
-- Session management in PostgreSQL (not Redis in minimal deployment)
-- Auth middleware validates tokens and checks permissions
-- Grafana uses auth proxy with Keystone authentication
+3. **Admin UI Not Loading** 
+   - Verify nginx server_name matches domain
+   - Use domain name, not localhost for testing
+   - Check /admin/ location block in nginx
+   - Ensure vite.config.ts has base: '/admin/'
 
-### Database Migration Strategy
-1. Migrations are in `/packages/backend/migrations/` as numbered SQL files
-2. Applied sequentially on container startup
-3. Core tables: users, roles, permissions, plugins, events, email_templates
-4. Uses PostgreSQL triggers for audit logging
-5. PostGIS enabled for spatial data
+4. **Authentication Issues**
+   - Check JWT_SECRET environment variable
+   - Verify user has admin role for plugin access
+   - Check token expiry (15 minutes default)
 
-### Email System Architecture
-- Brevo (SendInBlue) API for transactional emails
-- Inbound webhook processing at `/api/email/webhook`
-- Email templates stored in database
-- Complete email event tracking (sent, delivered, opened, clicked)
-- Rate limiting: 300 emails/day by default
-
-### Docker Deployment Patterns
-Two deployment configurations:
-
-**Minimal (docker-compose.minimal.yml)** - Production use:
-- PostgreSQL, Backend, Frontend, Backend-UI, Nginx
-- No Redis, monitoring handled separately
-- Simplified for resource efficiency
-
-**Full (docker-compose.yml)** - Development/Monitoring:
-- Includes all minimal services plus:
-- Redis, Prometheus, Grafana, Loki, Promtail
-- Node Exporter, PostgreSQL Exporter
-- Complete observability stack
-
-### Critical File Locations
-- Backend TypeScript → `/packages/backend/src/`
-- Compiled Backend → `/packages/backend/dist/`
-- When backend won't compile: Copy .ts files directly to .js in dist/
-- Nginx config → `/etc/nginx/sites-available/kevinalthaus.com`
-- SSL certificates → `/etc/letsencrypt/live/kevinalthaus.com/`
-- Database migrations → `/packages/backend/migrations/`
-
-## Known Issues & Workarounds
-
-### Backend TypeScript Compilation
-If TypeScript compilation fails due to missing types:
+### Debug Commands
 ```bash
-# Install missing type definitions
-npm install --save-dev @types/bcryptjs @types/jsonwebtoken @types/uuid
+# Check backend logs
+journalctl -u keystone-backend -f
 
-# If compilation still fails, copy source files as JavaScript
-cp packages/backend/src/routes/newfile.ts packages/backend/dist/routes/newfile.js
-# Then manually convert TypeScript to JavaScript syntax
+# Test nginx config
+sudo nginx -t
+
+# Check plugin database
+psql -U keystone -d keystone -c "SELECT * FROM plugins;"
+
+# Test API endpoints
+curl -X POST https://kevinalthaus.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test","password":"test"}'
 ```
 
-### Docker Container Updates
-When adding new files to backend:
-1. Files must be in dist/ folder
-2. Rebuild Docker image: `docker compose build backend`
-3. Recreate container: `docker compose up -d backend`
+## Key Implementation Notes
 
-### Nginx Configuration Changes
-```bash
-# Always test configuration first
-echo "(130Bpm)" | sudo -S nginx -t
+1. **Plugin Loading**: PluginLoader handles both array and object dependency structures in metadata
+2. **React Query**: Admin UI requires QueryClientProvider wrapper for state management
+3. **Nginx Routing**: Must use domain name (kevinalthaus.com) not localhost due to server_name matching
+4. **Base Path**: Admin UI built with /admin/ base path for proper asset loading
+5. **Authentication**: Admin role required for plugin management operations
 
-# Then reload
-echo "(130Bpm)" | sudo -S systemctl reload nginx
-```
+## Recent Changes
 
-## Service-Specific Notes
-
-### Backend Service
-- Express server with comprehensive middleware stack
-- Database service uses connection pooling (max 20 connections)
-- Health check endpoint: `/health`
-- Metrics endpoint: `/metrics` (Prometheus format)
-- Activity logging middleware tracks all API calls
-
-### Frontend Services
-- Both use Vite for fast development and optimized builds
-- Backend-UI requires authentication, Frontend is public
-- React Query for server state management
-- Environment variables injected at build time
-
-### Python Services
-- FastAPI with async support
-- Calculation endpoints for complex processing
-- Uses SQLAlchemy for database operations
-- Deployed via Uvicorn in Docker
-
-### Monitoring Stack
-- Prometheus scrapes metrics every 15s
-- Grafana dashboards auto-provisioned
-- Loki aggregates logs from all containers
-- Alerts configured in `/monitoring/prometheus/alerts.yml`
-
-## Security Considerations
-- All secrets in environment variables
-- HTTPS enforced via Nginx redirect
-- Rate limiting on API endpoints
-- CORS configured per environment
-- Security headers (HSTS, CSP, X-Frame-Options)
-- SQL injection prevention via parameterized queries
-- XSS prevention via React's built-in escaping
+1. **Admin/Frontend Separation**: Admin UI moved to /admin/, public frontend at /
+2. **QueryClient Fix**: Added QueryClientProvider to fix React Query initialization
+3. **Plugin System**: Fixed dependency checking, added UI management page
+4. **Nginx Configuration**: Updated to serve separate admin and public areas
+5. **Build Process**: Configured Vite with proper base paths for deployment

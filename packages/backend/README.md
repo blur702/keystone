@@ -1,14 +1,16 @@
 # @keystone/backend
 
-Node.js backend application providing core business logic and API services.
+Node.js backend application with dynamic plugin system providing core business logic and API services.
 
 ## Overview
 
 This package contains the backend application layer responsible for:
 - RESTful API endpoints
+- Dynamic plugin system with dependency management
 - Business logic implementation
-- Database interactions
-- Authentication and authorization
+- Database interactions (PostgreSQL + Redis)
+- JWT authentication and RBAC authorization
+- Email service integration (Brevo)
 - Integration with external services
 - Communication with Python calculation services
 
@@ -17,12 +19,14 @@ This package contains the backend application layer responsible for:
 ```
 backend/
 ├── src/
-│   ├── api/          # API route definitions
-│   ├── services/     # Business logic services
-│   ├── models/       # Data models and schemas
+│   ├── core/         # Core services (Auth, DB, Email, Plugin)
+│   │   ├── services/ # Service implementations
+│   │   └── PluginLoader.ts # Plugin system
+│   ├── plugins/      # Dynamic plugin modules
+│   ├── routes/       # API route definitions
 │   ├── middleware/   # Express middleware
 │   ├── utils/        # Utility functions
-│   └── index.ts      # Application entry point
+│   └── server.ts     # Application entry point
 └── tests/            # Test suites
 ```
 
@@ -49,11 +53,46 @@ Create a `.env` file in the package root:
 ```env
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=postgresql://user:pass@localhost:5432/keystone
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=keystone
+DB_USER=keystone
+DB_PASSWORD=keystone-dev-2024
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=redis
+
+# JWT
 JWT_SECRET=your-secret-key
-PYTHON_SERVICE_URL=http://localhost:8000
+JWT_EXPIRES_IN=15m
+REFRESH_TOKEN_EXPIRES_IN=7d
+
+# Email Service
+BREVO_API_KEY=your-brevo-api-key
+
+# CORS
+CORS_ORIGIN=http://localhost:5173,http://localhost:5174,https://kevinalthaus.com
 ```
 
-## API Documentation
+## Plugin System
 
-API documentation is available at `/api/docs` when running in development mode.
+The backend includes a dynamic plugin system:
+
+- **Location**: `src/plugins/`
+- **Auto-discovery**: Plugins are automatically loaded on startup
+- **Management API**: `/api/plugins` endpoints for enable/disable
+- **Metadata**: Each plugin requires `plugin.json` or `manifest.json`
+- **Database**: Plugin state stored in PostgreSQL
+
+## API Endpoints
+
+Key API routes:
+- `/api/auth/*` - Authentication endpoints
+- `/api/plugins/*` - Plugin management
+- `/api/{plugin-name}/*` - Plugin-specific routes
+- `/health` - Health check
+- `/metrics` - Prometheus metrics

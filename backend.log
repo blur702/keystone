@@ -51,3 +51,27 @@
 ::1 - - [26/Aug/2025:17:31:55 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
 ::1 - - [26/Aug/2025:17:41:55 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
 ::1 - - [26/Aug/2025:17:51:55 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+::ffff:127.0.0.1 - - [26/Aug/2025:18:02:25 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+[33mwarn[39m: 404 Not Found: GET /api/health {"timestamp":"2025-08-26T18:11:10.056Z"}
+::1 - - [26/Aug/2025:18:11:10 +0000] "GET /api/health HTTP/1.1" 404 76 "-" "curl/8.5.0"
+::1 - - [26/Aug/2025:18:11:14 +0000] "GET /health HTTP/1.1" 200 59 "-" "curl/8.5.0"
+[31merror[39m: Error: Unexpected token ! in JSON at position 67 {"body":"{\"email\": \"kevin@kevinalthaus.com\", \"password\": \"securePassword123\\!\"}","expose":true,"stack":"SyntaxError: Unexpected token ! in JSON at position 67\n    at JSON.parse (<anonymous>)\n    at parse (/home/kevin/keystone/node_modules/body-parser/lib/types/json.js:92:19)\n    at /home/kevin/keystone/node_modules/body-parser/lib/read.js:128:18\n    at AsyncResource.runInAsyncScope (node:async_hooks:203:9)\n    at invokeCallback (/home/kevin/keystone/node_modules/raw-body/index.js:238:16)\n    at done (/home/kevin/keystone/node_modules/raw-body/index.js:227:7)\n    at IncomingMessage.onEnd (/home/kevin/keystone/node_modules/raw-body/index.js:287:7)\n    at IncomingMessage.emit (node:events:517:28)\n    at endReadableNT (node:internal/streams/readable:1400:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:82:21)","status":400,"statusCode":400,"timestamp":"2025-08-26T18:11:21.254Z","type":"entity.parse.failed"}
+[31merror[39m: Login failed Invalid credentials {"stack":"Error: Invalid credentials\n    at AuthenticationService.login (/home/kevin/keystone/packages/backend/dist/core/services/AuthenticationService.js:96:23)\n    at async /home/kevin/keystone/packages/backend/dist/routes/auth.js:43:24","timestamp":"2025-08-26T18:11:27.120Z"}
+::1 - - [26/Aug/2025:18:11:27 +0000] "POST /api/auth/login HTTP/1.1" 401 31 "-" "curl/8.5.0"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T18:11:44.125Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T18:11:44.126Z"}
+::1 - - [26/Aug/2025:18:11:44 +0000] "POST /api/auth/login HTTP/1.1" 200 1002 "-" "curl/8.5.0"
+::1 - - [26/Aug/2025:18:12:15 +0000] "GET /api/plugins HTTP/1.1" 403 33 "-" "curl/8.5.0"
+::1 - - [26/Aug/2025:18:12:25 +0000] "POST /auth/refresh HTTP/1.1" 200 639 "https://kevinalthaus.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T18:13:50.389Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T18:13:50.390Z"}
+::1 - - [26/Aug/2025:18:13:50 +0000] "POST /api/auth/login HTTP/1.1" 200 1002 "-" "curl/8.5.0"
+::1 - - [26/Aug/2025:18:14:20 +0000] "GET /api/plugins HTTP/1.1" 403 33 "-" "curl/8.5.0"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T18:14:36.603Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T18:14:36.604Z"}
+::1 - - [26/Aug/2025:18:14:36 +0000] "POST /api/auth/login HTTP/1.1" 200 1002 "-" "curl/8.5.0"
+::1 - - [26/Aug/2025:18:14:54 +0000] "POST /api/auth/logout HTTP/1.1" 401 29 "-" "curl/8.5.0"
+[32minfo[39m: User logged in: kevin@kevinalthaus.com {"timestamp":"2025-08-26T18:15:49.886Z"}
+[32minfo[39m: User logged in: kevin {"timestamp":"2025-08-26T18:15:49.886Z"}
+::1 - - [26/Aug/2025:18:15:49 +0000] "POST /api/auth/login HTTP/1.1" 200 1002 "-" "axios/1.11.0"
+::1 - - [26/Aug/2025:18:15:49 +0000] "GET /api/plugins HTTP/1.1" 403 33 "-" "axios/1.11.0"

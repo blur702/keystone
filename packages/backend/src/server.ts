@@ -43,11 +43,11 @@ const logger = winston.createLogger({
 
 // Database connection
 const pool = new Pool({
-  host: process.env.DB_HOST || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME || 'keystone',
   user: process.env.DB_USER || 'keystone',
-  password: process.env.DB_PASSWORD || 'keystone',
+  password: process.env.DB_PASSWORD || 'keystone-dev-2024',
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -95,11 +95,11 @@ const initializeServices = async () => {
     const dbService = DatabaseService.getInstance(
       { 
         postgres: {
-          host: process.env.DB_HOST || 'postgres',
+          host: process.env.DB_HOST || 'localhost',
           port: parseInt(process.env.DB_PORT || '5432'),
           database: process.env.DB_NAME || 'keystone',
           user: process.env.DB_USER || 'keystone',
-          password: process.env.DB_PASSWORD || 'keystone',
+          password: process.env.DB_PASSWORD || 'keystone-dev-2024',
           max: 20,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 2000,

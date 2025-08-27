@@ -8,6 +8,7 @@ import WelcomePage from './pages/WelcomePage';
 import UsersPage from './pages/UsersPage';
 import RolesPage from './pages/RolesPage';
 import SettingsPage from './pages/SettingsPage';
+import PluginsPage from './pages/PluginsPage';
 import { lightTheme, darkTheme } from './theme';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -77,6 +78,14 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/plugins"
+          element={
+            <ProtectedRoute>
+              <PluginsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ThemeProvider>
@@ -85,7 +94,7 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/admin">
       <AuthProvider>
         <AppContent />
       </AuthProvider>

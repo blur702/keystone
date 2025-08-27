@@ -599,11 +599,28 @@ export class PluginLoader {
    * Check plugin dependencies
    */
   private async checkDependencies(metadata: PluginMetadata): Promise<void> {
-    if (!metadata.dependencies || metadata.dependencies.length === 0) {
+    // Handle both simple array and complex object structures
+    let dependencies: string[] = [];
+    
+    if (!metadata.dependencies) {
+      return;
+    }
+    
+    // Check if dependencies is an object with required/optional fields
+    if (typeof metadata.dependencies === 'object' && !Array.isArray(metadata.dependencies)) {
+      const deps = metadata.dependencies as any;
+      if (deps.required && Array.isArray(deps.required)) {
+        dependencies = deps.required;
+      }
+    } else if (Array.isArray(metadata.dependencies)) {
+      dependencies = metadata.dependencies;
+    }
+    
+    if (dependencies.length === 0) {
       return;
     }
 
-    for (const dependency of metadata.dependencies) {
+    for (const dependency of dependencies) {
       const installed = this.pluginData.has(dependency);
       if (!installed) {
         throw new Error(`Missing dependency: ${dependency}`);

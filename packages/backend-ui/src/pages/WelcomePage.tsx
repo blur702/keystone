@@ -22,7 +22,8 @@ import {
   Dashboard,
   Security,
   People,
-  Settings
+  Settings,
+  Extension
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,6 +45,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
   const handleManageUsers = () => navigate('/users');
   const handleConfigureRoles = () => navigate('/roles');
   const handleSystemSettings = () => navigate('/settings');
+  const handleManagePlugins = () => navigate('/plugins');
   const handleViewAnalytics = () => window.open('/grafana/', '_blank');
 
   const getInitials = (email: string) => {
@@ -60,6 +62,11 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
       icon: <People sx={{ fontSize: 40 }} />,
       title: 'User Management',
       description: 'Create and manage users, roles, and permissions'
+    },
+    {
+      icon: <Extension sx={{ fontSize: 40 }} />,
+      title: 'Plugin System',
+      description: 'Extend functionality with modular plugins'
     },
     {
       icon: <Dashboard sx={{ fontSize: 40 }} />,
@@ -188,6 +195,13 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ toggleTheme, isDarkMode }) =>
               onClick={handleConfigureRoles}
             >
               Configure Roles
+            </Button>
+            <Button 
+              variant="outlined" 
+              startIcon={<Extension />}
+              onClick={handleManagePlugins}
+            >
+              Manage Plugins
             </Button>
             <Button 
               variant="outlined" 
